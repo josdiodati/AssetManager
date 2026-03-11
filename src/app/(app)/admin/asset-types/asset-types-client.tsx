@@ -18,7 +18,7 @@ const categoryLabels: Record<string, string> = {
   STORAGE: 'Almacenamiento', VIRTUAL: 'Virtual', NETWORKING: 'Networking', OTHER: 'Otro'
 }
 
-export function AssetTypesClient({ assetTypes }: { assetTypes: AssetType[] }) {
+export function AssetTypesClient({ assetTypes, typeNames = [] }: { assetTypes: AssetType[]; typeNames?: { id: string; name: string }[] }) {
   const router = useRouter()
   const [modal, setModal] = useState<{ mode: 'create' | 'edit'; type?: AssetType } | null>(null)
   const [loading, setLoading] = useState(false)
@@ -71,7 +71,12 @@ export function AssetTypesClient({ assetTypes }: { assetTypes: AssetType[] }) {
       <ModalForm open={!!modal} onClose={() => setModal(null)} title={modal?.mode === 'create' ? 'Nuevo Tipo' : 'Editar Tipo'} onSubmit={handleSubmit} loading={loading}>
         <div className="space-y-2">
           <Label>Nombre</Label>
-          <Input value={form.name} onChange={e => setForm(f => ({ ...f, name: e.target.value }))} />
+          <Select value={form.name} onValueChange={v => setForm(f => ({ ...f, name: v }))}>
+            <SelectTrigger><SelectValue placeholder="Seleccionar nombre" /></SelectTrigger>
+            <SelectContent>
+              {typeNames.map(t => <SelectItem key={t.id} value={t.name}>{t.name}</SelectItem>)}
+            </SelectContent>
+          </Select>
         </div>
         {modal?.mode === 'create' && (
           <div className="space-y-2">

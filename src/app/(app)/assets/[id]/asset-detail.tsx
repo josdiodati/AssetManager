@@ -1,5 +1,5 @@
 'use client'
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import Link from 'next/link'
 import { useRouter } from 'next/navigation'
 import { Button } from '@/components/ui/button'
@@ -10,17 +10,19 @@ import { ModalForm } from '@/components/ui/modal-form'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
-import { ArrowLeft, Pencil, UserPlus, UserMinus, CheckCircle, XCircle, Mail } from 'lucide-react'
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog'
+import { ArrowLeft, Pencil, UserPlus, UserMinus, CheckCircle, XCircle, Mail, QrCode, Printer , FileText } from 'lucide-react'
 import { format } from 'date-fns'
 import { es } from 'date-fns/locale'
 import { assignAsset, unassignAsset, approveAssignment, rejectAssignment } from '@/lib/actions/assignments'
 import { generateAcceptanceToken } from '@/lib/actions/acceptance'
 import { toast } from 'sonner'
+import QRCodeLib from 'qrcode'
 
 type Person = { id: string; name: string; email: string; area: string | null; position: string | null }
 
 type Asset = {
-  id: string; assetTag: string; status: string; condition: string;
+  id: string; assetTag: string; qrToken: string | null; status: string; condition: string;
   serialNumber: string | null; description: string | null;
   assignedArea: string | null; createdAt: Date; updatedAt: Date;
   requiresApproval: boolean; approvalStatus: string; acceptanceStatus: string;
@@ -47,6 +49,10 @@ type Asset = {
   approvalEvents: {
     id: string; action: string; comment: string | null; createdAt: Date;
     performedBy: { name: string } | null;
+  }[];
+  documents?: {
+    id: string; type: string; filename: string; mimeType: string;
+    createdAt: Date; metadata: any;
   }[];
 }
 
@@ -107,6 +113,20 @@ export function AssetDetail({ asset, currentRole, persons }: {
 
   // Acceptance
   const [sendingAcceptance, setSendingAcceptance] = useState(false)
+
+  // QR modal
+  const [qrModal, setQrModal] = useState(false)
+  const [qrDataUrl, setQrDataUrl] = useState<string>('')
+
+  useEffect(() => {
+    if (qrModal && !qrDataUrl) {
+      const baseUrl = 'https://acceptance.kawellu.com.ar'
+      const text = asset.qrToken ? baseUrl + '/asset/' + asset.qrToken : asset.assetTag
+      QRCodeLib.toDataURL(text, { width: 256, margin: 2, errorCorrectionLevel: 'M' })
+        .then(url => setQrDataUrl(url))
+        .catch(() => {})
+    }
+  }, [qrModal, qrDataUrl, asset.assetTag, asset.serialNumber])
 
   async function handleAssign() {
     if (!selectedPersonId) { toast.error('Seleccioná una persona'); return }
@@ -237,6 +257,10 @@ export function AssetDetail({ asset, currentRole, persons }: {
               <UserPlus className="h-4 w-4 mr-1" />Asignar
             </Button>
           )}
+          {/* QR button */}
+          <Button variant="outline" size="sm" onClick={() => { setQrDataUrl(''); setQrModal(true) }}>
+            <QrCode className="h-4 w-4 mr-1" />QR
+          </Button>
           {canEdit && (
             <Link href={`/assets/${asset.id}/edit`}>
               <Button variant="outline"><Pencil className="h-4 w-4 mr-2" />Editar</Button>
@@ -394,6 +418,46 @@ export function AssetDetail({ asset, currentRole, persons }: {
               </Card>
             )}
 
+
+            {asset.documents && asset.documents.length > 0 && (
+              <Card>
+                <CardHeader><CardTitle className="text-base flex items-center gap-2"><FileText className="h-4 w-4 text-blue-600" />Documentos</CardTitle></CardHeader>
+                <CardContent>
+                  <div className="space-y-2">
+                    {asset.documents.map((doc: any) => {
+                      const meta = doc.metadata as any
+                      return (
+                        <div key={doc.id} className="flex items-center gap-3 p-3 rounded-lg border bg-gray-50 hover:bg-gray-100 transition-colors">
+                          <FileText className="h-8 w-8 text-red-500 shrink-0" />
+                          <div className="flex-1 min-w-0">
+                            <p className="text-sm font-medium truncate">{doc.filename}</p>
+                            <p className="text-xs text-muted-foreground">
+                              {doc.type === 'ACCEPTANCE' ? 'Constancia de Aceptación' : doc.type}
+                              {meta?.personName && <span> — {meta.personName}</span>}
+                            </p>
+                            {meta?.constanciaId && (
+                              <p className="text-xs font-mono text-gray-400 mt-0.5">ID: {meta.constanciaId}</p>
+                            )}
+                          </div>
+                          <div className="text-right shrink-0">
+                            <p className="text-xs text-muted-foreground mb-1">{fmt(doc.createdAt)}</p>
+                            <a
+                              href={`/api/documents/${doc.id}`}
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              className="text-xs text-blue-600 hover:text-blue-800 font-medium"
+                            >
+                              Ver PDF
+                            </a>
+                          </div>
+                        </div>
+                      )
+                    })}
+                  </div>
+                </CardContent>
+              </Card>
+            )}
+
             {asset.assignmentHistory.length === 0 && asset.approvalEvents.length === 0 && (
               <Card>
                 <CardContent className="py-8 text-center text-muted-foreground text-sm">Sin historial registrado</CardContent>
@@ -489,6 +553,35 @@ export function AssetDetail({ asset, currentRole, persons }: {
           <Input value={rejectComment} onChange={e => setRejectComment(e.target.value)} placeholder="Ingresá el motivo..." />
         </div>
       </ModalForm>
+
+      {/* QR MODAL */}
+      <Dialog open={qrModal} onOpenChange={setQrModal}>
+        <DialogContent className="max-w-sm">
+          <DialogHeader>
+            <DialogTitle>Código QR — {asset.assetTag}</DialogTitle>
+          </DialogHeader>
+          <div className="flex flex-col items-center gap-4 py-4">
+            {qrDataUrl ? (
+              <img src={qrDataUrl} alt="QR Code" className="w-48 h-48" />
+            ) : (
+              <div className="w-48 h-48 flex items-center justify-center bg-muted rounded-lg">
+                <span className="text-sm text-muted-foreground">Generando...</span>
+              </div>
+            )}
+            <p className="font-mono text-lg font-bold">{asset.assetTag}</p>
+            {asset.serialNumber && (
+              <p className="text-sm text-muted-foreground">S/N: {asset.serialNumber}</p>
+            )}
+            <Button
+              variant="outline"
+              className="w-full"
+              onClick={() => window.open(`/print/assets/${asset.id}/label`, '_blank')}
+            >
+              <Printer className="h-4 w-4 mr-2" />Imprimir etiqueta
+            </Button>
+          </div>
+        </DialogContent>
+      </Dialog>
     </div>
   )
 }

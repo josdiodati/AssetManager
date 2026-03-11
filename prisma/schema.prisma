@@ -30,6 +30,28 @@ enum AssetCategory {
   OTHER
 }
 
+
+model AssetTypeMaster {
+  id        String   @id @default(uuid())
+  name      String   @unique
+  active    Boolean  @default(true)
+  createdAt DateTime @default(now())
+}
+
+
+model AssetDocument {
+  id        String   @id @default(uuid())
+  assetId   String
+  asset     Asset    @relation(fields: [assetId], references: [id])
+  tenantId  String
+  type      String   @default("ACCEPTANCE")
+  filename  String
+  mimeType  String   @default("application/pdf")
+  content   String
+  metadata  Json?
+  createdAt DateTime @default(now())
+}
+
 enum AssetStatus {
   AVAILABLE
   ASSIGNED
@@ -227,9 +249,10 @@ model Brand {
 // ─── Model ────────────────────────────────────────────────────────────────────
 
 model Model {
-  id          String   @id @default(uuid())
-  brandId     String
-  name        String
+  id            String  @id @default(uuid())
+  brandId       String
+  name          String
+  assetTypeName String?
   active      Boolean  @default(true)
   createdAt   DateTime @default(now())
 
@@ -266,6 +289,7 @@ model Asset {
   id          String         @id @default(uuid())
   tenantId    String
   assetTag    String
+  qrToken     String?  @unique @default(uuid())
   assetTypeId String
   status      AssetStatus    @default(AVAILABLE)
   condition   AssetCondition @default(NEW)
@@ -320,6 +344,7 @@ model Asset {
   assignmentHistory AssignmentHistory[]
   approvalEvents   ApprovalEvent[]
   acceptanceTokens AcceptanceToken[]
+  documents        AssetDocument[]
   notifications    Notification[]
 
   @@unique([tenantId, assetTag])

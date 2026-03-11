@@ -23,10 +23,10 @@ export async function createBrand(name: string) {
   return brand
 }
 
-export async function createModel(brandId: string, name: string) {
+export async function createModel(brandId: string, name: string, assetTypeName?: string) {
   const session = await auth()
   if (!session) throw new Error('Unauthorized')
-  const model = await prisma.model.create({ data: { brandId, name } })
+  const model = await prisma.model.create({ data: { brandId, name, assetTypeName: assetTypeName ?? null } })
   revalidatePath('/admin/brands')
   return model
 }
@@ -38,7 +38,7 @@ export async function updateBrand(id: string, data: { name?: string; active?: bo
   revalidatePath('/admin/brands')
 }
 
-export async function updateModel(id: string, data: { name?: string; active?: boolean }) {
+export async function updateModel(id: string, data: { name?: string; active?: boolean; assetTypeName?: string | null }) {
   const session = await auth()
   if (!session) throw new Error('Unauthorized')
   await prisma.model.update({ where: { id }, data })

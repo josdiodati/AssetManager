@@ -39,3 +39,11 @@ export async function deleteTenant(id: string) {
   await prisma.tenant.update({ where: { id }, data: { deletedAt: new Date() } })
   revalidatePath('/admin/tenants')
 }
+
+export async function getTenantsForAdmins() {
+  const session = await auth()
+  if (!session || (session.user.role !== "SUPER_ADMIN" && session.user.role !== "INTERNAL_ADMIN")) {
+    throw new Error("Unauthorized")
+  }
+  return prisma.tenant.findMany({ where: { deletedAt: null }, orderBy: { name: "asc" } })
+}

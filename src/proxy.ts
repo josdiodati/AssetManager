@@ -9,7 +9,7 @@ export default auth((req) => {
   const session = req.auth
 
   // Public paths — always allow
-  if (pathname.startsWith('/login') || pathname.startsWith('/accept') || pathname.startsWith('/api/auth')) {
+  if (pathname.startsWith('/login') || pathname.startsWith('/accept') || pathname.startsWith('/asset') || pathname.startsWith('/api/auth')) {
     return NextResponse.next()
   }
 

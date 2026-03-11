@@ -4,6 +4,8 @@ import { auth } from '@/lib/auth'
 import { revalidatePath } from 'next/cache'
 import { randomUUID } from 'crypto'
 import { sendAcceptanceEmail } from '@/lib/email'
+import { headers } from 'next/headers'
+import { generateAndSaveAcceptancePdf } from '@/lib/generate-acceptance-pdf'
 
 export async function generateAcceptanceToken(assetId: string) {
   const session = await auth()
@@ -57,6 +59,7 @@ export async function generateAcceptanceToken(assetId: string) {
 
   // Send email
   await sendAcceptanceEmail({
+    tenantId: asset.tenantId,
     to: asset.assignedPerson.email,
     personName: asset.assignedPerson.name,
     assetTag: asset.assetTag,
@@ -109,12 +112,30 @@ export async function getAcceptancePageData(token: string) {
 export async function submitAcceptance(token: string, action: 'accept' | 'decline', signature?: string) {
   const record = await prisma.acceptanceToken.findUnique({
     where: { token },
-    include: { asset: true },
+    include: {
+      asset: {
+        include: {
+          assetType: { select: { name: true } },
+          brand: { select: { name: true } },
+          model: { select: { name: true } },
+          tenant: { select: { name: true } },
+          assignedPerson: { select: { name: true, email: true } },
+        },
+      },
+    },
   })
 
   if (!record) throw new Error('Token inválido')
   if (record.acceptedAt || record.rejectedAt) throw new Error('Este enlace ya fue utilizado')
   if (record.expiresAt < new Date()) throw new Error('Este enlace ha expirado')
+
+  // Get IP from request headers
+  const hdrs = await headers()
+  const ipAddress =
+    hdrs.get('cf-connecting-ip') ??
+    hdrs.get('x-forwarded-for')?.split(',')[0]?.trim() ??
+    hdrs.get('x-real-ip') ??
+    null
 
   const newAcceptanceStatus = action === 'accept' ? 'ACCEPTED' : 'REJECTED'
   const now = new Date()
@@ -135,11 +156,36 @@ export async function submitAcceptance(token: string, action: 'accept' | 'declin
         entityType: 'asset',
         entityId: record.assetId,
         action: action === 'accept' ? 'acceptance_accepted' : 'acceptance_declined',
-        afterData: { acceptanceStatus: newAcceptanceStatus, personId: record.personId },
+        afterData: { acceptanceStatus: newAcceptanceStatus, personId: record.personId, ipAddress },
         source: 'WEB',
       },
     }),
   ])
+
+  // Generate and save PDF only on acceptance
+  if (action === 'accept' && record.asset.assignedPerson) {
+    try {
+      await generateAndSaveAcceptancePdf({
+        constanciaId: '',
+        tenantName: record.asset.tenant?.name ?? 'Organización',
+        assetId: record.assetId,
+        tenantId: record.asset.tenantId,
+        assetTag: record.asset.assetTag,
+        assetType: record.asset.assetType?.name ?? 'Activo',
+        brandName: record.asset.brand?.name ?? '',
+        modelName: record.asset.model?.name ?? '',
+        serialNumber: record.asset.serialNumber,
+        personName: record.asset.assignedPerson.name,
+        personEmail: record.asset.assignedPerson.email ?? record.emailSentTo,
+        acceptedAt: now,
+        ipAddress,
+        acceptanceTokenId: record.id,
+      })
+    } catch (pdfErr) {
+      // PDF generation is best-effort — don't fail the acceptance if PDF fails
+      console.error('PDF generation failed:', pdfErr)
+    }
+  }
 
   return { success: true, action }
 }

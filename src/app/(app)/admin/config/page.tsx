@@ -1,3 +1,14 @@
-export default function ConfigPage() {
-  return <div className="space-y-6"><h1 className="text-2xl font-bold">Configuración</h1><div className="border rounded-lg p-8 text-center text-muted-foreground">Configuración del cliente — próximamente</div></div>
+import { auth } from '@/lib/auth'
+import { redirect } from 'next/navigation'
+import { getAssetTypeMasters } from '@/lib/actions/config'
+import { ConfigClient } from './config-client'
+
+export default async function ConfigPage() {
+  const session = await auth()
+  if (!session) redirect('/login')
+
+  const typeNames = await getAssetTypeMasters()
+  const isSuperAdmin = session.user.role === 'SUPER_ADMIN'
+
+  return <ConfigClient typeNames={typeNames} isSuperAdmin={isSuperAdmin} />
 }

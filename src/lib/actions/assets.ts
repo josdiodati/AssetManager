@@ -79,6 +79,17 @@ export async function getAsset(id: string) {
         include: { performedBy: { select: { name: true } } },
         orderBy: { createdAt: 'desc' },
       },
+      documents: {
+        orderBy: { createdAt: 'desc' },
+        select: {
+          id: true,
+          type: true,
+          filename: true,
+          mimeType: true,
+          createdAt: true,
+          metadata: true,
+        },
+      },
     },
   })
   if (!asset) throw new Error('Asset not found')
