@@ -1,4 +1,5 @@
 'use client'
+import { useEffect } from 'react'
 import Link from 'next/link'
 import { AlertTriangle, Clock, Cpu } from 'lucide-react'
 
@@ -93,6 +94,11 @@ export function AlertsClient({ alerts }: { alerts: AlertsData }) {
   const { expiringSoon, eolSoon, expired } = alerts
   const total = expiringSoon.length + eolSoon.length + expired.length
 
+  // Mark alerts as seen: stamp the current count in a cookie so the header badge clears
+  useEffect(() => {
+    document.cookie = `alerts_seen_count=${total}; path=/; max-age=${60 * 60 * 24 * 365}`
+  }, [total])
+
   return (
     <div className="space-y-6">
       <div className="flex items-center justify-between">
@@ -118,12 +124,7 @@ export function AlertsClient({ alerts }: { alerts: AlertsData }) {
           <span className="text-xs text-yellow-600">próximos 30 días</span>
         </div>
         <div className="p-4">
-          <AssetTable
-            assets={expiringSoon}
-            dateField="warrantyExpiresAt"
-            labelDate="Vence el"
-            labelDays="Días restantes"
-          />
+          <AssetTable assets={expiringSoon} dateField="warrantyExpiresAt" labelDate="Vence el" labelDays="Días restantes" />
         </div>
       </div>
 
@@ -138,12 +139,7 @@ export function AlertsClient({ alerts }: { alerts: AlertsData }) {
           <span className="text-xs text-orange-600">próximos 60 días</span>
         </div>
         <div className="p-4">
-          <AssetTable
-            assets={eolSoon}
-            dateField="eolDate"
-            labelDate="EOL el"
-            labelDays="Días restantes"
-          />
+          <AssetTable assets={eolSoon} dateField="eolDate" labelDate="EOL el" labelDays="Días restantes" />
         </div>
       </div>
 
@@ -158,13 +154,7 @@ export function AlertsClient({ alerts }: { alerts: AlertsData }) {
           <span className="text-xs text-red-600">activos sin renovar</span>
         </div>
         <div className="p-4">
-          <AssetTable
-            assets={expired}
-            dateField="warrantyExpiresAt"
-            labelDate="Venció el"
-            labelDays="Vencido hace"
-            expired
-          />
+          <AssetTable assets={expired} dateField="warrantyExpiresAt" labelDate="Venció el" labelDays="Vencido hace" expired />
         </div>
       </div>
     </div>
