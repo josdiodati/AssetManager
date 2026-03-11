@@ -11,25 +11,34 @@ import { Plus, Pencil, Trash2 } from 'lucide-react'
 import { createLocation, updateLocation, deleteLocation } from '@/lib/actions/locations'
 import { toast } from 'sonner'
 
-type Location = { id: string; site: string; area: string | null; detail: string | null; active: boolean }
+type Location = { id: string; site: string; area: string | null; detail: string | null; active: boolean; tenant?: { name: string } | null }
 type Tenant = { id: string; name: string }
 
 export function LocationsClient({ locations, tenants, defaultTenantId, currentRole }: {
   locations: Location[]; tenants: Tenant[]; defaultTenantId: string; currentRole: string
 }) {
   const router = useRouter()
+  const isSuperOrInternal = currentRole === 'SUPER_ADMIN' || currentRole === 'INTERNAL_ADMIN'
   const [modal, setModal] = useState<{ mode: 'create' | 'edit'; loc?: Location } | null>(null)
   const [loading, setLoading] = useState(false)
+  const [filterTenant, setFilterTenant] = useState<string>('__all__')
   const [form, setForm] = useState({ site: '', area: '', detail: '', tenantId: defaultTenantId })
 
-  function openCreate() { setForm({ site: '', area: '', detail: '', tenantId: defaultTenantId }); setModal({ mode: 'create' }) }
-  function openEdit(l: Location) { setForm({ site: l.site, area: l.area ?? '', detail: l.detail ?? '', tenantId: defaultTenantId }); setModal({ mode: 'edit', loc: l }) }
+  function openCreate() {
+    setForm({ site: '', area: '', detail: '', tenantId: defaultTenantId || '' })
+    setModal({ mode: 'create' })
+  }
+  function openEdit(l: Location) {
+    setForm({ site: l.site, area: l.area ?? '', detail: l.detail ?? '', tenantId: defaultTenantId })
+    setModal({ mode: 'edit', loc: l })
+  }
 
   async function handleSubmit() {
+    if (!form.tenantId) { toast.error('Seleccioná un cliente'); return }
     setLoading(true)
     try {
       if (modal?.mode === 'create') {
-        await createLocation({ tenantId: form.tenantId || defaultTenantId, site: form.site, area: form.area || undefined, detail: form.detail || undefined })
+        await createLocation({ tenantId: form.tenantId, site: form.site, area: form.area || undefined, detail: form.detail || undefined })
         toast.success('Ubicación creada')
       } else if (modal?.loc) {
         await updateLocation(modal.loc.id, { site: form.site, area: form.area || undefined, detail: form.detail || undefined })
@@ -47,6 +56,13 @@ export function LocationsClient({ locations, tenants, defaultTenantId, currentRo
     catch (e: any) { toast.error(e.message) }
   }
 
+  const filtered = filterTenant === '__all__'
+    ? locations
+    : locations.filter(l => {
+        // need tenantId on Location — filter by tenant name as proxy
+        return l.tenant?.name === tenants.find(t => t.id === filterTenant)?.name
+      })
+
   return (
     <div className="space-y-6">
       <div className="flex items-center justify-between">
@@ -56,15 +72,30 @@ export function LocationsClient({ locations, tenants, defaultTenantId, currentRo
         </div>
         <Button onClick={openCreate}><Plus className="h-4 w-4 mr-2" />Nueva Ubicación</Button>
       </div>
+
+      {isSuperOrInternal && tenants.length > 0 && (
+        <div className="flex items-center gap-3">
+          <Label className="shrink-0 text-sm">Filtrar por cliente:</Label>
+          <Select value={filterTenant} onValueChange={setFilterTenant}>
+            <SelectTrigger className="w-56"><SelectValue /></SelectTrigger>
+            <SelectContent>
+              <SelectItem value="__all__">Todos los clientes</SelectItem>
+              {tenants.map(t => <SelectItem key={t.id} value={t.id}>{t.name}</SelectItem>)}
+            </SelectContent>
+          </Select>
+        </div>
+      )}
+
       <DataTable
-        data={locations}
+        data={filtered}
         searchKeys={['site', 'area']}
         searchPlaceholder="Buscar ubicación..."
         columns={[
+          ...(isSuperOrInternal ? [{ key: 'tenant' as any, header: 'Cliente', render: (r: Location) => r.tenant?.name ?? '—' }] : []),
           { key: 'site', header: 'Sede' },
-          { key: 'area', header: 'Área', render: r => r.area ?? '—' },
-          { key: 'detail', header: 'Detalle', render: r => r.detail ?? '—' },
-          { key: 'active', header: 'Estado', render: r => <span className={`px-2 py-0.5 rounded text-xs font-medium ${r.active ? 'bg-green-100 text-green-800' : 'bg-gray-100 text-gray-600'}`}>{r.active ? 'Activa' : 'Inactiva'}</span> },
+          { key: 'area', header: 'Área', render: (r: Location) => r.area ?? '—' },
+          { key: 'detail', header: 'Detalle', render: (r: Location) => r.detail ?? '—' },
+          { key: 'active', header: 'Estado', render: (r: Location) => <span className={`px-2 py-0.5 rounded text-xs font-medium ${r.active ? 'bg-green-100 text-green-800' : 'bg-gray-100 text-gray-600'}`}>{r.active ? 'Activa' : 'Inactiva'}</span> },
         ]}
         actions={l => (
           <div className="flex items-center gap-2 justify-end">
@@ -73,19 +104,29 @@ export function LocationsClient({ locations, tenants, defaultTenantId, currentRo
           </div>
         )}
       />
-      <ModalForm open={!!modal} onClose={() => setModal(null)} title={modal?.mode === 'create' ? 'Nueva Ubicación' : 'Editar Ubicación'} onSubmit={handleSubmit} loading={loading}>
-        {currentRole === 'SUPER_ADMIN' && modal?.mode === 'create' && tenants.length > 0 && (
+
+      <ModalForm
+        open={!!modal}
+        onClose={() => setModal(null)}
+        title={modal?.mode === 'create' ? 'Nueva Ubicación' : 'Editar Ubicación'}
+        onSubmit={handleSubmit}
+        loading={loading}
+      >
+        {isSuperOrInternal && modal?.mode === 'create' && tenants.length > 0 && (
           <div className="space-y-2">
-            <Label>Cliente</Label>
-            <Select value={form.tenantId} onValueChange={v => setForm(f => ({ ...f, tenantId: v }))}>
+            <Label>Cliente *</Label>
+            <Select value={form.tenantId || '__none__'} onValueChange={v => setForm(f => ({ ...f, tenantId: v === '__none__' ? '' : v }))}>
               <SelectTrigger><SelectValue placeholder="Seleccionar cliente" /></SelectTrigger>
-              <SelectContent>{tenants.map(t => <SelectItem key={t.id} value={t.id}>{t.name}</SelectItem>)}</SelectContent>
+              <SelectContent>
+                <SelectItem value="__none__">— Seleccioná un cliente —</SelectItem>
+                {tenants.map(t => <SelectItem key={t.id} value={t.id}>{t.name}</SelectItem>)}
+              </SelectContent>
             </Select>
           </div>
         )}
         <div className="space-y-2">
           <Label>Sede *</Label>
-          <Input value={form.site} onChange={e => setForm(f => ({ ...f, site: e.target.value }))} placeholder="Oficina Central" />
+          <Input value={form.site} onChange={e => setForm(f => ({ ...f, site: e.target.value }))} placeholder="Oficina Central" autoFocus />
         </div>
         <div className="space-y-2">
           <Label>Área</Label>

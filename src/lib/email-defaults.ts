@@ -41,6 +41,11 @@ export const DEFAULT_EMAIL_BODY = `<!DOCTYPE html>
         </a>
       </div>
 
+      <div style="background: #fffbeb; border: 1px solid #fbbf24; border-radius: 8px; padding: 16px; margin: 0 0 20px;">
+        <p style="color: #92400e; font-size: 13px; margin: 0 0 6px; font-weight: 600;">📎 Reglamento de uso adjunto</p>
+        <p style="color: #92400e; font-size: 13px; margin: 0;">Encontrarás adjunto a este correo el <strong>Reglamento de Uso de Equipo Corporativo</strong>. Te pedimos que lo leas detenidamente antes de confirmar la recepción, ya que al hacerlo estás aceptando los términos y condiciones de uso del equipo.</p>
+      </div>
+
       <p style="color: #6b7280; font-size: 13px; margin: 0;">Este enlace expira en 30 días. Si tenés preguntas, contactá a tu área de IT.</p>
     </div>
     <div style="background: #f9fafb; padding: 20px; text-align: center; border-top: 1px solid #e5e7eb;">

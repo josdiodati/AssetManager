@@ -18,8 +18,12 @@ export default async function AssetLabelPage({ params }: { params: Promise<{ id:
 
   if (!asset) notFound()
 
-  const qrText = asset.assetTag + (asset.serialNumber ? '\nS/N: ' + asset.serialNumber : '')
-  const qrDataUrl = await QRCode.toDataURL(qrText, { width: 300, margin: 2, errorCorrectionLevel: 'M' })
+  const baseUrl = process.env.ACCEPTANCE_BASE_URL ?? 'http://localhost:3000'
+  const qrContent = asset.qrToken
+    ? `${baseUrl}/asset/${asset.qrToken}`
+    : asset.assetTag
+
+  const qrDataUrl = await QRCode.toDataURL(qrContent, { width: 300, margin: 2, errorCorrectionLevel: 'M' })
 
   const brandModel = [asset.brand?.name, asset.model?.name].filter(Boolean).join(' / ')
 

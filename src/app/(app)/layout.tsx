@@ -2,6 +2,7 @@ import { auth } from '@/lib/auth'
 import { redirect } from 'next/navigation'
 import { Sidebar } from '@/components/layout/sidebar'
 import { Header } from '@/components/layout/header'
+import { SidebarProvider } from '@/components/layout/sidebar-context'
 import { getAlertCount } from '@/lib/actions/alerts'
 
 export default async function AppLayout({ children }: { children: React.ReactNode }) {
@@ -16,12 +17,14 @@ export default async function AppLayout({ children }: { children: React.ReactNod
   }
 
   return (
-    <div className="flex h-screen bg-gray-50">
-      <Sidebar role={session.user.role} />
-      <div className="flex-1 flex flex-col overflow-hidden">
-        <Header user={session.user} alertCount={alertCount} />
-        <main className="flex-1 overflow-auto p-6">{children}</main>
+    <SidebarProvider>
+      <div className="flex h-screen bg-gray-50">
+        <Sidebar role={session.user.role} />
+        <div className="flex-1 flex flex-col overflow-hidden min-w-0">
+          <Header user={session.user} alertCount={alertCount} />
+          <main className="flex-1 overflow-auto p-4 md:p-6">{children}</main>
+        </div>
       </div>
-    </div>
+    </SidebarProvider>
   )
 }

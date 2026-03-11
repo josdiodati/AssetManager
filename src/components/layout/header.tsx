@@ -4,7 +4,8 @@ import { signOut } from 'next-auth/react'
 import { Avatar, AvatarFallback } from '@/components/ui/avatar'
 import { Button } from '@/components/ui/button'
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator, DropdownMenuTrigger } from '@/components/ui/dropdown-menu'
-import { LogOut, User, Bell } from 'lucide-react'
+import { LogOut, User, Bell, Menu } from 'lucide-react'
+import { useSidebar } from './sidebar-context'
 
 const roleLabels: Record<string, string> = { SUPER_ADMIN: 'Super Admin', INTERNAL_ADMIN: 'Admin Interno', CLIENT_ADMIN: 'Admin Cliente' }
 
@@ -12,10 +13,21 @@ export function Header({ user, alertCount = 0 }: {
   user: { name?: string | null; email?: string | null; role: string }
   alertCount?: number
 }) {
+  const { toggle } = useSidebar()
   const initials = user.name ? user.name.split(' ').map((n: string) => n[0]).join('').toUpperCase().slice(0, 2) : 'U'
   return (
-    <header className="h-16 border-b bg-white flex items-center justify-between px-6 shrink-0">
-      <span className="text-sm text-muted-foreground">{roleLabels[user.role] ?? user.role}</span>
+    <header className="h-16 border-b bg-white flex items-center justify-between px-4 md:px-6 shrink-0">
+      <div className="flex items-center gap-3">
+        {/* Hamburger — mobile only */}
+        <button
+          onClick={toggle}
+          className="md:hidden p-2 rounded-lg text-gray-600 hover:bg-gray-100 transition-colors"
+          aria-label="Open menu"
+        >
+          <Menu className="h-5 w-5" />
+        </button>
+        <span className="text-sm text-muted-foreground">{roleLabels[user.role] ?? user.role}</span>
+      </div>
       <div className="flex items-center gap-3">
         {/* Alert Bell */}
         <Link href="/alerts" className="relative p-2 rounded-lg hover:bg-gray-100 transition-colors">

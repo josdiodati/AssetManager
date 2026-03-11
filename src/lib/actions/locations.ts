@@ -3,9 +3,10 @@ import { prisma } from '@/lib/prisma'
 import { auth } from '@/lib/auth'
 import { revalidatePath } from 'next/cache'
 
-export async function getLocations(tenantId: string) {
+export async function getLocations(tenantId?: string | null) {
   return prisma.location.findMany({
-    where: { tenantId, deletedAt: null, active: true },
+    where: { ...(tenantId ? { tenantId } : {}), deletedAt: null, active: true },
+    include: { tenant: { select: { name: true } } },
     orderBy: [{ site: 'asc' }, { area: 'asc' }]
   })
 }
