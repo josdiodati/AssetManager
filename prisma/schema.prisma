@@ -1,0 +1,490 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+
+}
+
+// ─── Enums ───────────────────────────────────────────────────────────────────
+
+enum UserRole {
+  SUPER_ADMIN
+  INTERNAL_ADMIN
+  CLIENT_ADMIN
+}
+
+enum Language {
+  es
+  en
+}
+
+enum AssetCategory {
+  INFRASTRUCTURE
+  TERMINAL
+  PERIPHERAL
+  STORAGE
+  VIRTUAL
+  NETWORKING
+  OTHER
+}
+
+enum AssetStatus {
+  AVAILABLE
+  ASSIGNED
+  PENDING_APPROVAL
+  IN_REPAIR
+  ON_LOAN
+  OBSOLETE
+  LOST
+  STOLEN
+  DECOMMISSIONED
+}
+
+enum AssetCondition {
+  NEW
+  GOOD
+  FAIR
+  POOR
+}
+
+enum ApprovalStatus {
+  NOT_REQUIRED
+  PENDING
+  APPROVED
+  REJECTED
+}
+
+enum AcceptanceStatus {
+  NOT_SENT
+  PENDING
+  ACCEPTED
+  REJECTED
+  BOUNCED
+  ERROR
+}
+
+enum AssignmentAction {
+  ASSIGNED
+  UNASSIGNED
+  REASSIGNED
+}
+
+enum ApprovalAction {
+  SUBMITTED
+  APPROVED
+  REJECTED
+}
+
+enum AttachmentType {
+  INVOICE
+  REMITO
+  ACTA
+  REPAIR
+  OTHER
+}
+
+enum NotificationType {
+  ASSIGNMENT_ACCEPTANCE
+  APPROVAL_REQUEST
+  ACCEPTANCE_REMINDER
+  SYSTEM
+}
+
+enum NotificationStatus {
+  PENDING
+  SENT
+  DELIVERED
+  ERROR
+  BOUNCED
+}
+
+enum AuditSource {
+  WEB
+  GOOGLE_CHAT
+  IMPORT
+  SYSTEM
+}
+
+// ─── Tenant ───────────────────────────────────────────────────────────────────
+
+model Tenant {
+  id        String   @id @default(uuid())
+  name      String
+  slug      String   @unique
+  config    Json     @default("{}")
+  active    Boolean  @default(true)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  deletedAt DateTime?
+
+  users               User[]
+  persons             Person[]
+  assets              Asset[]
+  locations           Location[]
+  assetTypes          AssetType[]
+  acceptanceTemplates AcceptanceTemplate[]
+  notifications       Notification[]
+  auditLogs           AuditLog[]
+
+  @@index([slug])
+  @@index([deletedAt])
+}
+
+// ─── User (platform users — have login) ──────────────────────────────────────
+
+model User {
+  id           String    @id @default(uuid())
+  email        String    @unique
+  name         String
+  passwordHash String
+  role         UserRole
+  tenantId     String?
+  language     Language  @default(es)
+  active       Boolean   @default(true)
+  createdAt    DateTime  @default(now())
+  updatedAt    DateTime  @updatedAt
+  deletedAt    DateTime?
+
+  tenant              Tenant?              @relation(fields: [tenantId], references: [id])
+  createdAssets       Asset[]              @relation("AssetCreatedBy")
+  approvalEvents      ApprovalEvent[]
+  assignmentHistory   AssignmentHistory[]  @relation("PerformedBy")
+  uploadedImages      AssetImage[]
+  uploadedAttachments AssetAttachment[]
+  createdTemplates    AcceptanceTemplate[]
+  auditLogs           AuditLog[]
+
+  @@index([tenantId])
+  @@index([email])
+  @@index([deletedAt])
+}
+
+// ─── Person (asset recipients — no login) ────────────────────────────────────
+
+model Person {
+  id         String    @id @default(uuid())
+  tenantId   String
+  name       String
+  email      String
+  area       String?
+  position   String?
+  locationId String?
+  hireDate   DateTime?
+  notes      String?
+  active     Boolean   @default(true)
+  createdAt  DateTime  @default(now())
+  updatedAt  DateTime  @updatedAt
+  deletedAt  DateTime?
+
+  tenant           Tenant              @relation(fields: [tenantId], references: [id])
+  location         Location?           @relation(fields: [locationId], references: [id])
+  assignedAssets   Asset[]
+  assignmentHistory AssignmentHistory[] @relation("FromPerson")
+  reassignmentHistory AssignmentHistory[] @relation("ToPerson")
+  acceptanceTokens AcceptanceToken[]
+
+  @@index([tenantId])
+  @@index([email])
+  @@index([deletedAt])
+}
+
+// ─── AssetType ────────────────────────────────────────────────────────────────
+
+model AssetType {
+  id                   String        @id @default(uuid())
+  tenantId             String?
+  name                 String
+  category             AssetCategory
+  requiresApproval     Boolean       @default(false)
+  allowsPersonAssignment Boolean     @default(true)
+  fieldConfig          Json          @default("{}")
+  active               Boolean       @default(true)
+  createdAt            DateTime      @default(now())
+  updatedAt            DateTime      @updatedAt
+
+  tenant Tenant?  @relation(fields: [tenantId], references: [id])
+  assets Asset[]
+
+  @@index([tenantId])
+}
+
+// ─── Brand ────────────────────────────────────────────────────────────────────
+
+model Brand {
+  id        String   @id @default(uuid())
+  name      String   @unique
+  active    Boolean  @default(true)
+  createdAt DateTime @default(now())
+
+  models Model[]
+  assets Asset[]
+
+  @@index([name])
+}
+
+// ─── Model ────────────────────────────────────────────────────────────────────
+
+model Model {
+  id          String   @id @default(uuid())
+  brandId     String
+  name        String
+  active      Boolean  @default(true)
+  createdAt   DateTime @default(now())
+
+  brand  Brand  @relation(fields: [brandId], references: [id])
+  assets Asset[]
+
+  @@index([brandId])
+}
+
+// ─── Location ─────────────────────────────────────────────────────────────────
+
+model Location {
+  id        String    @id @default(uuid())
+  tenantId  String
+  site      String
+  area      String?
+  detail    String?
+  active    Boolean   @default(true)
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @updatedAt
+  deletedAt DateTime?
+
+  tenant  Tenant   @relation(fields: [tenantId], references: [id])
+  assets  Asset[]
+  persons Person[]
+
+  @@index([tenantId])
+  @@index([deletedAt])
+}
+
+// ─── Asset ────────────────────────────────────────────────────────────────────
+
+model Asset {
+  id          String         @id @default(uuid())
+  tenantId    String
+  assetTag    String
+  assetTypeId String
+  status      AssetStatus    @default(AVAILABLE)
+  condition   AssetCondition @default(NEW)
+  brandId     String?
+  modelId     String?
+  serialNumber String?
+  description  String?
+
+  // Assignment
+  assignedPersonId String?
+  assignedArea     String?
+  locationId       String?
+  assignedAt       DateTime?
+  requiresApproval Boolean          @default(false)
+  approvalStatus   ApprovalStatus   @default(NOT_REQUIRED)
+  acceptanceStatus AcceptanceStatus @default(NOT_SENT)
+
+  // Technical fields
+  hostname         String?
+  os               String?
+  cpu              String?
+  ram              String?
+  storageCapacity  String?
+  ipAddress        String?
+  macAddress       String?
+  firmwareVersion  String?
+  antivirus        String?
+  warrantyExpiresAt DateTime?
+  eolDate          DateTime?
+  providerName     String?
+  providerTaxId    String?
+  invoiceNumber    String?
+  invoiceDate      DateTime?
+  repairNote       String?
+
+  // Meta
+  createdById String?
+  active      Boolean   @default(true)
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+  deletedAt   DateTime?
+
+  tenant           Tenant              @relation(fields: [tenantId], references: [id])
+  assetType        AssetType           @relation(fields: [assetTypeId], references: [id])
+  brand            Brand?              @relation(fields: [brandId], references: [id])
+  model            Model?              @relation(fields: [modelId], references: [id])
+  assignedPerson   Person?             @relation(fields: [assignedPersonId], references: [id])
+  location         Location?           @relation(fields: [locationId], references: [id])
+  createdBy        User?               @relation("AssetCreatedBy", fields: [createdById], references: [id])
+  images           AssetImage[]
+  attachments      AssetAttachment[]
+  assignmentHistory AssignmentHistory[]
+  approvalEvents   ApprovalEvent[]
+  acceptanceTokens AcceptanceToken[]
+  notifications    Notification[]
+
+  @@unique([tenantId, assetTag])
+  @@index([tenantId])
+  @@index([status])
+  @@index([assignedPersonId])
+  @@index([deletedAt])
+}
+
+// ─── AssetImage ───────────────────────────────────────────────────────────────
+
+model AssetImage {
+  id           String   @id @default(uuid())
+  assetId      String
+  storagePath  String
+  label        String?
+  uploadedById String?
+  createdAt    DateTime @default(now())
+
+  asset      Asset @relation(fields: [assetId], references: [id])
+  uploadedBy User? @relation(fields: [uploadedById], references: [id])
+
+  @@index([assetId])
+}
+
+// ─── AssetAttachment ──────────────────────────────────────────────────────────
+
+model AssetAttachment {
+  id           String         @id @default(uuid())
+  assetId      String
+  filename     String
+  storagePath  String
+  type         AttachmentType @default(OTHER)
+  uploadedById String?
+  createdAt    DateTime       @default(now())
+
+  asset      Asset @relation(fields: [assetId], references: [id])
+  uploadedBy User? @relation(fields: [uploadedById], references: [id])
+
+  @@index([assetId])
+}
+
+// ─── AssignmentHistory ────────────────────────────────────────────────────────
+
+model AssignmentHistory {
+  id             String           @id @default(uuid())
+  assetId        String
+  fromPersonId   String?
+  toPersonId     String?
+  fromLocationId String?
+  toLocationId   String?
+  action         AssignmentAction
+  performedById  String?
+  notes          String?
+  createdAt      DateTime         @default(now())
+
+  asset        Asset    @relation(fields: [assetId], references: [id])
+  fromPerson   Person?  @relation("FromPerson", fields: [fromPersonId], references: [id])
+  toPerson     Person?  @relation("ToPerson", fields: [toPersonId], references: [id])
+  performedBy  User?    @relation("PerformedBy", fields: [performedById], references: [id])
+
+  @@index([assetId])
+}
+
+// ─── ApprovalEvent ────────────────────────────────────────────────────────────
+
+model ApprovalEvent {
+  id            String         @id @default(uuid())
+  assetId       String
+  action        ApprovalAction
+  performedById String?
+  comment       String?
+  createdAt     DateTime       @default(now())
+
+  asset       Asset @relation(fields: [assetId], references: [id])
+  performedBy User? @relation(fields: [performedById], references: [id])
+
+  @@index([assetId])
+}
+
+// ─── AcceptanceToken ──────────────────────────────────────────────────────────
+
+model AcceptanceToken {
+  id          String    @id @default(uuid())
+  assetId     String
+  personId    String
+  emailSentTo String
+  token       String    @unique @default(uuid())
+  expiresAt   DateTime
+  acceptedAt  DateTime?
+  rejectedAt  DateTime?
+  createdAt   DateTime  @default(now())
+
+  asset  Asset  @relation(fields: [assetId], references: [id])
+  person Person @relation(fields: [personId], references: [id])
+
+  @@index([token])
+  @@index([assetId])
+}
+
+// ─── AcceptanceTemplate ───────────────────────────────────────────────────────
+
+model AcceptanceTemplate {
+  id           String   @id @default(uuid())
+  tenantId     String
+  name         String
+  language     Language @default(es)
+  emailSubject String
+  bodyHtml     String
+  isDefault    Boolean  @default(false)
+  version      Int      @default(1)
+  active       Boolean  @default(true)
+  createdById  String?
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  tenant    Tenant @relation(fields: [tenantId], references: [id])
+  createdBy User?  @relation(fields: [createdById], references: [id])
+
+  @@index([tenantId])
+}
+
+// ─── Notification ─────────────────────────────────────────────────────────────
+
+model Notification {
+  id                String             @id @default(uuid())
+  tenantId          String
+  assetId           String?
+  type              NotificationType
+  recipientEmail    String
+  subject           String
+  status            NotificationStatus @default(PENDING)
+  providerMessageId String?
+  sentAt            DateTime?
+  errorMessage      String?
+  createdAt         DateTime           @default(now())
+
+  tenant Tenant  @relation(fields: [tenantId], references: [id])
+  asset  Asset?  @relation(fields: [assetId], references: [id])
+
+  @@index([tenantId])
+  @@index([assetId])
+  @@index([status])
+}
+
+// ─── AuditLog ─────────────────────────────────────────────────────────────────
+
+model AuditLog {
+  id         String      @id @default(uuid())
+  tenantId   String?
+  userId     String?
+  entityType String
+  entityId   String
+  action     String
+  beforeData Json?
+  afterData  Json?
+  ipAddress  String?
+  source     AuditSource @default(WEB)
+  createdAt  DateTime    @default(now())
+
+  tenant Tenant? @relation(fields: [tenantId], references: [id])
+  user   User?   @relation(fields: [userId], references: [id])
+
+  @@index([tenantId])
+  @@index([entityType, entityId])
+  @@index([userId])
+  @@index([createdAt])
+}
