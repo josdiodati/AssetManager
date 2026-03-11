@@ -150,6 +150,9 @@ const styles = StyleSheet.create({
   },
 })
 
+const DEFAULT_TITLE = 'Constancia de Recepción y Compromiso de Uso Responsable'
+const DEFAULT_WARNING = 'El incumplimiento de los términos aquí establecidos podrá dar lugar a acciones disciplinarias conforme a la normativa laboral vigente y/o acciones legales según corresponda.'
+
 export interface AcceptancePdfData {
   constanciaId: string
   tenantName: string
@@ -166,10 +169,14 @@ export interface AcceptancePdfData {
   personName: string
   personEmail: string
   // Acceptance
-  acceptedAt: Date
+  acceptedAt: Date | null
   ipAddress: string | null
   // Token
   acceptanceTokenId: string
+  // Template overrides
+  clauses?: Array<{ title: string; body: string }>
+  documentTitle?: string
+  warningText?: string
 }
 
 export function AcceptancePdfDocument({ data }: { data: AcceptancePdfData }) {
@@ -178,16 +185,20 @@ export function AcceptancePdfDocument({ data }: { data: AcceptancePdfData }) {
   const formatDateTime = (d: Date) =>
     d.toLocaleString('es-AR', { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit', second: '2-digit', timeZone: 'UTC' }) + ' UTC'
 
+  const docTitle = data.documentTitle ?? DEFAULT_TITLE
+  const warningText = data.warningText ?? DEFAULT_WARNING
+  const clauses = data.clauses ?? []
+
   return (
     <Document
-      title={`Constancia de Recepción — ${data.assetTag}`}
+      title={`${docTitle} — ${data.assetTag}`}
       author={data.tenantName}
-      subject="Constancia de Recepción y Compromiso de Uso Responsable de Equipo"
+      subject={docTitle}
     >
       <Page size="A4" style={styles.page}>
         {/* Header */}
         <View style={styles.header}>
-          <Text style={styles.headerTitle}>Constancia de Recepción y Compromiso de Uso Responsable</Text>
+          <Text style={styles.headerTitle}>{docTitle}</Text>
           <Text style={styles.headerSubtitle}>{data.tenantName} — Documento generado electrónicamente</Text>
         </View>
 
@@ -200,7 +211,9 @@ export function AcceptancePdfDocument({ data }: { data: AcceptancePdfData }) {
           {data.serialNumber && (
             <View style={styles.row}><Text style={styles.labelCell}>Número de serie:</Text><Text style={styles.valueCell}>{data.serialNumber}</Text></View>
           )}
-          <View style={styles.row}><Text style={styles.labelCell}>Fecha de entrega:</Text><Text style={styles.valueCell}>{formatDate(data.acceptedAt)}</Text></View>
+          {data.acceptedAt && (
+            <View style={styles.row}><Text style={styles.labelCell}>Fecha de entrega:</Text><Text style={styles.valueCell}>{formatDate(data.acceptedAt)}</Text></View>
+          )}
         </View>
 
         {/* Recipient data */}
@@ -220,114 +233,55 @@ export function AcceptancePdfDocument({ data }: { data: AcceptancePdfData }) {
             con los siguientes términos y condiciones:
           </Text>
 
-          <View style={styles.legalItem}>
-            <Text style={styles.legalBullet}>1.</Text>
-            <Text style={styles.legalItemText}>
-              <Text style={{ fontFamily: 'Helvetica-Bold' }}>Uso exclusivamente corporativo: </Text>
-              El equipo asignado es propiedad de {data.tenantName} y se entrega al receptor para uso exclusivo en el
-              desempeño de sus funciones laborales. Queda expresamente prohibido su uso para actividades personales,
-              comerciales ajenas a la organización, o cualquier fin ilícito.
-            </Text>
-          </View>
-
-          <View style={styles.legalItem}>
-            <Text style={styles.legalBullet}>2.</Text>
-            <Text style={styles.legalItemText}>
-              <Text style={{ fontFamily: 'Helvetica-Bold' }}>Custodia y cuidado: </Text>
-              El receptor asume plena responsabilidad por la integridad física del equipo desde la fecha de recepción.
-              Deberá conservarlo en condiciones adecuadas, evitar golpes, derrames de líquidos, exposición a temperaturas
-              extremas y cualquier otra situación que pueda provocar daño o deterioro.
-            </Text>
-          </View>
-
-          <View style={styles.legalItem}>
-            <Text style={styles.legalBullet}>3.</Text>
-            <Text style={styles.legalItemText}>
-              <Text style={{ fontFamily: 'Helvetica-Bold' }}>Seguridad de la información: </Text>
-              El receptor se compromete a mantener la confidencialidad de toda la información corporativa almacenada
-              o procesada en el equipo. No deberá compartir credenciales de acceso ni permitir el uso del equipo a
-              terceros sin autorización expresa del área de IT.
-            </Text>
-          </View>
-
-          <View style={styles.legalItem}>
-            <Text style={styles.legalBullet}>4.</Text>
-            <Text style={styles.legalItemText}>
-              <Text style={{ fontFamily: 'Helvetica-Bold' }}>Prohibición de modificaciones no autorizadas: </Text>
-              No se podrá instalar software no licenciado, modificar la configuración de seguridad, desinstalar
-              herramientas de gestión remota, ni realizar cambios de hardware sin la previa autorización del
-              departamento de sistemas.
-            </Text>
-          </View>
-
-          <View style={styles.legalItem}>
-            <Text style={styles.legalBullet}>5.</Text>
-            <Text style={styles.legalItemText}>
-              <Text style={{ fontFamily: 'Helvetica-Bold' }}>Pérdida, robo o daño: </Text>
-              En caso de pérdida, robo o daño total o parcial del equipo, el receptor deberá notificarlo de inmediato
-              al área de IT. La organización evaluará las circunstancias y podrá reclamar al receptor el costo de
-              reposición en caso de negligencia comprobada.
-            </Text>
-          </View>
-
-          <View style={styles.legalItem}>
-            <Text style={styles.legalBullet}>6.</Text>
-            <Text style={styles.legalItemText}>
-              <Text style={{ fontFamily: 'Helvetica-Bold' }}>Devolución del equipo: </Text>
-              Al finalizar la relación laboral o ante requerimiento de la organización, el receptor deberá devolver
-              el equipo en el mismo estado en que fue entregado, considerando el desgaste normal de uso. La
-              información corporativa almacenada podrá ser borrada por el equipo de IT previo a cualquier reasignación.
-            </Text>
-          </View>
-
-          <View style={styles.legalItem}>
-            <Text style={styles.legalBullet}>7.</Text>
-            <Text style={styles.legalItemText}>
-              <Text style={{ fontFamily: 'Helvetica-Bold' }}>Auditoría y monitoreo: </Text>
-              La organización se reserva el derecho de auditar el uso del equipo y de los sistemas corporativos con
-              el objetivo de garantizar el cumplimiento de las políticas de seguridad y uso aceptable. El receptor
-              presta conformidad con dichas actividades de monitoreo.
-            </Text>
-          </View>
+          {clauses.map((clause, idx) => (
+            <View key={idx} style={styles.legalItem}>
+              <Text style={styles.legalBullet}>{idx + 1}.</Text>
+              <Text style={styles.legalItemText}>
+                <Text style={{ fontFamily: 'Helvetica-Bold' }}>{clause.title}: </Text>
+                {clause.body}
+              </Text>
+            </View>
+          ))}
 
           <View style={styles.warningBox}>
-            <Text style={styles.warningText}>
-              El incumplimiento de los términos aquí establecidos podrá dar lugar a acciones disciplinarias conforme
-              a la normativa laboral vigente y/o acciones legales según corresponda.
-            </Text>
+            <Text style={styles.warningText}>{warningText}</Text>
           </View>
         </View>
 
-        {/* Acceptance stamp */}
-        <View style={styles.stampBox}>
-          <Text style={styles.stampTitle}>✓  ACEPTACIÓN ELECTRÓNICA REGISTRADA</Text>
-          <View style={styles.stampRow}>
-            <Text style={styles.stampLabel}>Firmante:</Text>
-            <Text style={styles.stampValue}>{data.personName} &lt;{data.personEmail}&gt;</Text>
-          </View>
-          <View style={styles.stampRow}>
-            <Text style={styles.stampLabel}>Fecha y hora:</Text>
-            <Text style={styles.stampValue}>{formatDateTime(data.acceptedAt)}</Text>
-          </View>
-          {data.ipAddress && (
+        {/* Acceptance stamp — only when acceptedAt is present */}
+        {data.acceptedAt && (
+          <View style={styles.stampBox}>
+            <Text style={styles.stampTitle}>✓  ACEPTACIÓN ELECTRÓNICA REGISTRADA</Text>
             <View style={styles.stampRow}>
-              <Text style={styles.stampLabel}>Dirección IP:</Text>
-              <Text style={styles.stampValue}>{data.ipAddress}</Text>
+              <Text style={styles.stampLabel}>Firmante:</Text>
+              <Text style={styles.stampValue}>{data.personName} &lt;{data.personEmail}&gt;</Text>
             </View>
-          )}
-          <View style={styles.stampRow}>
-            <Text style={styles.stampLabel}>Token:</Text>
-            <Text style={styles.stampValue}>{data.acceptanceTokenId}</Text>
+            <View style={styles.stampRow}>
+              <Text style={styles.stampLabel}>Fecha y hora:</Text>
+              <Text style={styles.stampValue}>{formatDateTime(data.acceptedAt)}</Text>
+            </View>
+            {data.ipAddress && (
+              <View style={styles.stampRow}>
+                <Text style={styles.stampLabel}>Dirección IP:</Text>
+                <Text style={styles.stampValue}>{data.ipAddress}</Text>
+              </View>
+            )}
+            <View style={styles.stampRow}>
+              <Text style={styles.stampLabel}>Token:</Text>
+              <Text style={styles.stampValue}>{data.acceptanceTokenId}</Text>
+            </View>
+            <Text style={styles.constanciaId}>
+              ID de constancia: {data.constanciaId}
+            </Text>
           </View>
-          <Text style={styles.constanciaId}>
-            ID de constancia: {data.constanciaId}
-          </Text>
-        </View>
+        )}
 
         {/* Footer */}
         <View style={styles.footer} fixed>
           <Text style={styles.footerText}>{data.tenantName} — Sistema de Inventario IT</Text>
-          <Text style={styles.footerText}>Documento generado electrónicamente — {formatDate(data.acceptedAt)}</Text>
+          <Text style={styles.footerText}>
+            Documento generado electrónicamente{data.acceptedAt ? ` — ${formatDate(data.acceptedAt)}` : ''}
+          </Text>
           <Text style={styles.footerText} render={({ pageNumber, totalPages }) => `Pág. ${pageNumber} / ${totalPages}`} />
         </View>
       </Page>

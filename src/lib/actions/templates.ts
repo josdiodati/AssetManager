@@ -54,3 +54,37 @@ export async function saveTemplate(
 
   revalidatePath('/admin/templates')
 }
+
+// Alias for backward compat
+export async function getEmailTemplate(tenantId: string) {
+  return prisma.acceptanceTemplate.findFirst({
+    where: { tenantId, isDefault: true, active: true },
+    orderBy: { createdAt: 'desc' },
+  })
+}
+
+export async function getPdfTemplate(tenantId: string) {
+  return prisma.pdfTemplate.findFirst({
+    where: { tenantId, active: true },
+    orderBy: { version: 'desc' },
+  })
+}
+
+export async function savePdfTemplate(tenantId: string, data: {
+  title: string
+  clauses: Array<{ title: string; body: string }>
+  warning: string
+}) {
+  const session = await auth()
+  if (!session || session.user.role === 'CLIENT_ADMIN') throw new Error('Unauthorized')
+  const existing = await prisma.pdfTemplate.findFirst({ where: { tenantId, active: true } })
+  if (existing) {
+    return prisma.pdfTemplate.update({
+      where: { id: existing.id },
+      data: { title: data.title, clauses: data.clauses as any, warning: data.warning, version: existing.version + 1 },
+    })
+  }
+  return prisma.pdfTemplate.create({
+    data: { tenantId, title: data.title, clauses: data.clauses as any, warning: data.warning },
+  })
+}

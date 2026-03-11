@@ -513,3 +513,19 @@ model AuditLog {
   @@index([userId])
   @@index([createdAt])
 }
+
+// ─── PdfTemplate ──────────────────────────────────────────────────────────────
+
+model PdfTemplate {
+  id        String   @id @default(uuid())
+  tenantId  String
+  title     String
+  clauses   Json
+  warning   String
+  active    Boolean  @default(true)
+  version   Int      @default(1)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([tenantId])
+}

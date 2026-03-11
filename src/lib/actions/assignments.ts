@@ -90,6 +90,7 @@ export async function unassignAsset(assetId: string, notes?: string) {
       assignedAt: null,
       status: 'AVAILABLE' as any,
       approvalStatus: 'NOT_REQUIRED' as any,
+      acceptanceStatus: 'NOT_SENT' as any,
     },
   })
 
