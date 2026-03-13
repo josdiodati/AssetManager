@@ -13,7 +13,8 @@ const tenantSchema = z.object({
 export async function getTenants() {
   const session = await auth()
   if (!session || session.user.role !== 'SUPER_ADMIN') throw new Error('Unauthorized')
-  return prisma.tenant.findMany({ where: { deletedAt: null }, orderBy: { name: 'asc' } })
+  // Returns ALL tenants (active and inactive) — never hard-deleted
+  return prisma.tenant.findMany({ where: { deletedAt: null }, orderBy: [{ active: 'desc' }, { name: 'asc' }] })
 }
 
 export async function createTenant(data: z.infer<typeof tenantSchema>) {
@@ -33,11 +34,14 @@ export async function updateTenant(id: string, data: Partial<z.infer<typeof tena
   return tenant
 }
 
-export async function deleteTenant(id: string) {
+export async function toggleTenantActive(id: string) {
   const session = await auth()
   if (!session || session.user.role !== 'SUPER_ADMIN') throw new Error('Unauthorized')
-  await prisma.tenant.update({ where: { id }, data: { deletedAt: new Date() } })
+  const tenant = await prisma.tenant.findUnique({ where: { id } })
+  if (!tenant) throw new Error('Tenant not found')
+  await prisma.tenant.update({ where: { id }, data: { active: !tenant.active } })
   revalidatePath('/admin/tenants')
+  return { active: !tenant.active }
 }
 
 export async function getTenantsForAdmins() {
@@ -45,5 +49,6 @@ export async function getTenantsForAdmins() {
   if (!session || (session.user.role !== "SUPER_ADMIN" && session.user.role !== "INTERNAL_ADMIN")) {
     throw new Error("Unauthorized")
   }
-  return prisma.tenant.findMany({ where: { deletedAt: null }, orderBy: { name: "asc" } })
+  // Only active tenants visible to non-SUPER_ADMIN flows
+  return prisma.tenant.findMany({ where: { deletedAt: null, active: true }, orderBy: { name: "asc" } })
 }
