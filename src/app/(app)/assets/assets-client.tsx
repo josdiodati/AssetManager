@@ -26,14 +26,14 @@ type Asset = {
   id: string; assetTag: string; status: string; condition: string;
   serialNumber: string | null; description: string | null;
   assignedArea: string | null; createdAt: Date;
-  assetType: { name: string; category: string } | null;
+  assetType: { name: string; category: { code: string; name: string } | null } | null;
   brand: { name: string } | null;
   model: { name: string } | null;
   assignedPerson: { name: string; email: string } | null;
   location: { site: string; area: string | null } | null;
 }
 
-type AssetType = { id: string; name: string; category: string }
+type AssetType = { id: string; name: string; category: { code: string; name: string } | null }
 type Tenant = { id: string; name: string }
 
 interface AssetsClientProps {

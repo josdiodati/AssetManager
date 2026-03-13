@@ -20,38 +20,6 @@ enum Language {
   en
 }
 
-enum AssetCategory {
-  INFRASTRUCTURE
-  TERMINAL
-  PERIPHERAL
-  STORAGE
-  VIRTUAL
-  NETWORKING
-  OTHER
-}
-
-
-model AssetTypeMaster {
-  id        String   @id @default(uuid())
-  name      String   @unique
-  active    Boolean  @default(true)
-  createdAt DateTime @default(now())
-}
-
-
-model AssetDocument {
-  id        String   @id @default(uuid())
-  assetId   String
-  asset     Asset    @relation(fields: [assetId], references: [id])
-  tenantId  String
-  type      String   @default("ACCEPTANCE")
-  filename  String
-  mimeType  String   @default("application/pdf")
-  content   String
-  metadata  Json?
-  createdAt DateTime @default(now())
-}
-
 enum AssetStatus {
   AVAILABLE
   ASSIGNED
@@ -127,6 +95,45 @@ enum AuditSource {
   GOOGLE_CHAT
   IMPORT
   SYSTEM
+}
+
+// ─── AssetCategory (editable table, replaces enum) ───────────────────────────
+
+model AssetCategory {
+  id          String     @id @default(uuid())
+  code        String     @unique
+  name        String
+  description String?
+  active      Boolean    @default(true)
+  createdAt   DateTime   @default(now())
+  updatedAt   DateTime   @updatedAt
+
+  assetTypes  AssetType[]
+
+  @@index([code])
+}
+
+// ─── AssetTypeMaster ──────────────────────────────────────────────────────────
+
+model AssetTypeMaster {
+  id        String   @id @default(uuid())
+  name      String   @unique
+  active    Boolean  @default(true)
+  createdAt DateTime @default(now())
+}
+
+
+model AssetDocument {
+  id        String   @id @default(uuid())
+  assetId   String
+  asset     Asset    @relation(fields: [assetId], references: [id])
+  tenantId  String
+  type      String   @default("ACCEPTANCE")
+  filename  String
+  mimeType  String   @default("application/pdf")
+  content   String
+  metadata  Json?
+  createdAt DateTime @default(now())
 }
 
 // ─── Tenant ───────────────────────────────────────────────────────────────────
@@ -215,21 +222,23 @@ model Person {
 // ─── AssetType ────────────────────────────────────────────────────────────────
 
 model AssetType {
-  id                   String        @id @default(uuid())
-  tenantId             String?
-  name                 String
-  category             AssetCategory
-  requiresApproval     Boolean       @default(false)
-  allowsPersonAssignment Boolean     @default(true)
-  fieldConfig          Json          @default("{}")
-  active               Boolean       @default(true)
-  createdAt            DateTime      @default(now())
-  updatedAt            DateTime      @updatedAt
+  id                     String        @id @default(uuid())
+  tenantId               String?
+  name                   String
+  categoryId             String
+  requiresApproval       Boolean       @default(false)
+  allowsPersonAssignment Boolean       @default(true)
+  fieldConfig            Json          @default("{}")
+  active                 Boolean       @default(true)
+  createdAt              DateTime      @default(now())
+  updatedAt              DateTime      @updatedAt
 
-  tenant Tenant?  @relation(fields: [tenantId], references: [id])
-  assets Asset[]
+  tenant   Tenant?       @relation(fields: [tenantId], references: [id])
+  category AssetCategory @relation(fields: [categoryId], references: [id])
+  assets   Asset[]
 
   @@index([tenantId])
+  @@index([categoryId])
 }
 
 // ─── Brand ────────────────────────────────────────────────────────────────────

@@ -92,7 +92,7 @@ export async function getAcceptancePageData(token: string) {
     include: {
       asset: {
         include: {
-          assetType: { select: { name: true, category: true } },
+          assetType: { select: { name: true, category: { select: { code: true, name: true } } } },
           brand: { select: { name: true } },
           model: { select: { name: true } },
           location: { select: { site: true, area: true, detail: true } },

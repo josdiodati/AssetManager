@@ -1,11 +1,22 @@
 import 'dotenv/config'
 import { PrismaPg } from '@prisma/adapter-pg'
-import { PrismaClient, UserRole, AssetCategory } from '@prisma/client'
+import { PrismaClient, UserRole } from '@prisma/client'
 import * as bcrypt from 'bcryptjs'
 
 const prisma = new PrismaClient({
   adapter: new PrismaPg({ connectionString: process.env.DATABASE_URL! }),
 })
+
+// Map from category code to categoryId — resolved at runtime
+const CATEGORY_CODE_MAP: Record<string, string> = {}
+
+async function resolveCategoryId(code: string): Promise<string> {
+  if (CATEGORY_CODE_MAP[code]) return CATEGORY_CODE_MAP[code]
+  const cat = await prisma.assetCategory.findUnique({ where: { code } })
+  if (!cat) throw new Error(`AssetCategory with code "${code}" not found`)
+  CATEGORY_CODE_MAP[code] = cat.id
+  return cat.id
+}
 
 async function main() {
   console.log('Seeding database...')
@@ -74,36 +85,37 @@ async function main() {
   console.log('✓ Client Admin: admin@demo.com')
 
   // ── Global Asset Types ───────────────────────────────────────────────────
-  const assetTypes = [
-    { name: 'Laptop', category: AssetCategory.TERMINAL, requiresApproval: false, allowsPerson: true,
+  const assetTypeDefs = [
+    { name: 'Laptop',          categoryCode: 'TERMINAL',       requiresApproval: false, allowsPerson: true,
       fields: ['hostname','os','cpu','ram','storageCapacity','macAddress','warrantyExpiresAt','eolDate'] },
-    { name: 'Desktop', category: AssetCategory.TERMINAL, requiresApproval: false, allowsPerson: true,
+    { name: 'Desktop',         categoryCode: 'TERMINAL',       requiresApproval: false, allowsPerson: true,
       fields: ['hostname','os','cpu','ram','storageCapacity','ipAddress','macAddress','warrantyExpiresAt'] },
-    { name: 'Servidor', category: AssetCategory.INFRASTRUCTURE, requiresApproval: true, allowsPerson: false,
+    { name: 'Servidor',        categoryCode: 'INFRASTRUCTURE', requiresApproval: true,  allowsPerson: false,
       fields: ['hostname','os','cpu','ram','storageCapacity','ipAddress','macAddress','firmwareVersion','warrantyExpiresAt','eolDate'] },
-    { name: 'Monitor', category: AssetCategory.PERIPHERAL, requiresApproval: false, allowsPerson: true,
+    { name: 'Monitor',         categoryCode: 'PERIPHERAL',     requiresApproval: false, allowsPerson: true,
       fields: ['warrantyExpiresAt'] },
-    { name: 'Impresora', category: AssetCategory.PERIPHERAL, requiresApproval: false, allowsPerson: false,
+    { name: 'Impresora',       categoryCode: 'PERIPHERAL',     requiresApproval: false, allowsPerson: false,
       fields: ['ipAddress','macAddress','firmwareVersion','warrantyExpiresAt'] },
-    { name: 'Switch', category: AssetCategory.NETWORKING, requiresApproval: true, allowsPerson: false,
+    { name: 'Switch',          categoryCode: 'NETWORKING',     requiresApproval: true,  allowsPerson: false,
       fields: ['hostname','ipAddress','macAddress','firmwareVersion','warrantyExpiresAt','eolDate'] },
-    { name: 'Router', category: AssetCategory.NETWORKING, requiresApproval: true, allowsPerson: false,
+    { name: 'Router',          categoryCode: 'NETWORKING',     requiresApproval: true,  allowsPerson: false,
       fields: ['hostname','ipAddress','macAddress','firmwareVersion','warrantyExpiresAt','eolDate'] },
-    { name: 'Storage', category: AssetCategory.STORAGE, requiresApproval: true, allowsPerson: false,
+    { name: 'Storage',         categoryCode: 'STORAGE',        requiresApproval: true,  allowsPerson: false,
       fields: ['hostname','storageCapacity','ipAddress','macAddress','firmwareVersion','warrantyExpiresAt','eolDate'] },
-    { name: 'Cámara', category: AssetCategory.PERIPHERAL, requiresApproval: false, allowsPerson: false,
+    { name: 'Cámara',          categoryCode: 'PERIPHERAL',     requiresApproval: false, allowsPerson: false,
       fields: ['ipAddress','macAddress','firmwareVersion','warrantyExpiresAt'] },
-    { name: 'Virtual Machine', category: AssetCategory.VIRTUAL, requiresApproval: true, allowsPerson: false,
+    { name: 'Virtual Machine', categoryCode: 'VIRTUAL',        requiresApproval: true,  allowsPerson: false,
       fields: ['hostname','os','cpu','ram','storageCapacity','ipAddress'] },
   ]
 
-  for (const at of assetTypes) {
+  for (const at of assetTypeDefs) {
+    const categoryId = await resolveCategoryId(at.categoryCode)
     const existing = await prisma.assetType.findFirst({ where: { name: at.name, tenantId: null } })
     if (!existing) {
       await prisma.assetType.create({
         data: {
           name: at.name,
-          category: at.category,
+          categoryId,
           requiresApproval: at.requiresApproval,
           allowsPersonAssignment: at.allowsPerson,
           fieldConfig: { show: at.fields },

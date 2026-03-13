@@ -24,7 +24,7 @@ type PageData =
           cpu: string | null
           ram: string | null
           storageCapacity: string | null
-          assetType: { name: string; category: string } | null
+          assetType: { name: string; category: { code: string; name: string } | null } | null
           brand: { name: string } | null
           model: { name: string } | null
           location: { site: string; area: string | null; detail: string | null } | null

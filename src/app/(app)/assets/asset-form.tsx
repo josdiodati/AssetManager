@@ -12,7 +12,7 @@ import { toast } from 'sonner'
 import { ArrowLeft } from 'lucide-react'
 import Link from 'next/link'
 
-type AssetType = { id: string; name: string; category: string; requiresApproval: boolean; fieldConfig: any }
+type AssetType = { id: string; name: string; categoryId: string; category: { code: string; name: string }; requiresApproval: boolean; fieldConfig: any }
 type Brand = { id: string; name: string; models: { id: string; name: string }[] }
 type Location = { id: string; site: string; area: string | null; detail: string | null }
 type Tenant = { id: string; name: string }

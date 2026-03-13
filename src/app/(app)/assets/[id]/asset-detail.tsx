@@ -33,7 +33,7 @@ type Asset = {
   providerName: string | null; providerTaxId: string | null;
   invoiceNumber: string | null; invoiceDate: Date | null; repairNote: string | null;
   tenantId: string;
-  assetType: { name: string; category: string } | null;
+  assetType: { name: string; category: { code: string; name: string } | null } | null;
   brand: { name: string } | null;
   model: { name: string } | null;
   assignedPerson: { id: string; name: string; email: string } | null;

@@ -1,11 +1,12 @@
 import { getAssetTypes } from '@/lib/actions/asset-types'
-import { getAssetTypeMasters } from '@/lib/actions/config'
+import { getAssetTypeMasters, getActiveAssetCategories } from '@/lib/actions/config'
 import { AssetTypesClient } from './asset-types-client'
 
 export default async function AssetTypesPage() {
-  const [assetTypes, typeNames] = await Promise.all([
+  const [assetTypes, typeNames, categories] = await Promise.all([
     getAssetTypes(),
     getAssetTypeMasters(),
+    getActiveAssetCategories(),
   ])
-  return <AssetTypesClient assetTypes={assetTypes} typeNames={typeNames} />
+  return <AssetTypesClient assetTypes={assetTypes as any} typeNames={typeNames} categories={categories} />
 }

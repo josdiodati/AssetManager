@@ -35,7 +35,7 @@ export async function getAssets(filters?: {
     prisma.asset.findMany({
       where,
       include: {
-        assetType: { select: { name: true, category: true } },
+        assetType: { include: { category: { select: { code: true, name: true } } } },
         brand: { select: { name: true } },
         model: { select: { name: true } },
         assignedPerson: { select: { name: true, email: true } },
@@ -59,7 +59,7 @@ export async function getAsset(id: string) {
   const asset = await prisma.asset.findFirst({
     where: { id, deletedAt: null, ...(tenantId ? { tenantId } : {}) },
     include: {
-      assetType: true,
+      assetType: { include: { category: true } },
       brand: true,
       model: true,
       assignedPerson: true,
@@ -96,11 +96,11 @@ export async function getAsset(id: string) {
   return asset
 }
 
-async function generateAssetTag(tenantId: string, assetTypeCategory: string): Promise<string> {
+async function generateAssetTag(tenantId: string, categoryCode: string): Promise<string> {
   const tenant = await prisma.tenant.findUnique({ where: { id: tenantId } })
   const config = (tenant?.config as any) ?? {}
   const prefix = config.assetTagPrefix ?? tenant?.slug?.toUpperCase().slice(0, 4) ?? 'ASSET'
-  const typeCode = assetTypeCategory.slice(0, 3).toUpperCase()
+  const typeCode = categoryCode.slice(0, 3).toUpperCase()
 
   const count = await prisma.asset.count({ where: { tenantId } })
   const seq = String(count + 1).padStart(4, '0')
@@ -119,10 +119,13 @@ export async function createAsset(data: {
   const session = await auth()
   if (!session || session.user.role === 'CLIENT_ADMIN') throw new Error('Unauthorized')
 
-  const assetType = await prisma.assetType.findUnique({ where: { id: data.assetTypeId } })
+  const assetType = await prisma.assetType.findUnique({
+    where: { id: data.assetTypeId },
+    include: { category: true },
+  })
   if (!assetType) throw new Error('Asset type not found')
 
-  const assetTag = await generateAssetTag(data.tenantId, assetType.category)
+  const assetTag = await generateAssetTag(data.tenantId, assetType.category.code)
 
   const asset = await prisma.asset.create({
     data: {
