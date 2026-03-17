@@ -13,8 +13,9 @@ import { toast } from 'sonner'
 
 type Person = {
   id: string; name: string; email: string; area: string | null;
-  position: string | null; active: boolean;
-  location: { site: string; area: string | null } | null;
+  position: string | null; active: boolean; tenantId: string; notes: string | null;
+  locationId: string | null;
+  location: { id: string; site: string; area: string | null } | null;
   tenant?: { name: string } | null;
 }
 type Location = { id: string; site: string; area: string | null; detail: string | null }
@@ -40,7 +41,15 @@ export function PersonsClient({ persons, locations, tenantId, currentRole, tenan
     setModal({ mode: 'create' })
   }
   function openEdit(p: Person) {
-    setForm({ name: p.name, email: p.email, area: p.area ?? '', position: p.position ?? '', locationId: '', notes: '', selectedTenantId: tenantId })
+    setForm({
+      name: p.name,
+      email: p.email,
+      area: p.area ?? '',
+      position: p.position ?? '',
+      locationId: p.locationId ?? '',
+      notes: p.notes ?? '',
+      selectedTenantId: p.tenantId,
+    })
     setModal({ mode: 'edit', person: p })
   }
 
@@ -62,10 +71,13 @@ export function PersonsClient({ persons, locations, tenantId, currentRole, tenan
         toast.success('Persona creada')
       } else if (modal?.person) {
         await updatePerson(modal.person.id, {
+          tenantId: effectiveTenantId,
           name: form.name,
           email: form.email,
           area: form.area || undefined,
           position: form.position || undefined,
+          locationId: (form.locationId && form.locationId !== '__none__') ? form.locationId : null,
+          notes: form.notes || undefined,
         })
         toast.success('Persona actualizada')
       }
@@ -120,7 +132,7 @@ export function PersonsClient({ persons, locations, tenantId, currentRole, tenan
 
       <ModalForm open={!!modal} onClose={() => setModal(null)} title={modal?.mode === 'create' ? 'Nueva Persona' : 'Editar Persona'} onSubmit={handleSubmit} loading={loading}>
         <div className="grid grid-cols-2 gap-3">
-          {isSuperAdmin && modal?.mode === 'create' && tenants.length > 0 && (
+          {isSuperAdmin && tenants.length > 0 && (
             <div className="space-y-2 col-span-2">
               <Label>Cliente *</Label>
               <Select value={form.selectedTenantId} onValueChange={v => setForm(f => ({ ...f, selectedTenantId: v }))}>

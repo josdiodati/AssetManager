@@ -10,7 +10,7 @@ export async function getPersons(tenantId?: string | null) {
     where,
     orderBy: { name: 'asc' },
     include: {
-      location: { select: { site: true, area: true } },
+      location: { select: { id: true, site: true, area: true } },
       tenant: { select: { name: true } },
     },
   })
@@ -40,8 +40,8 @@ export async function createPerson(data: {
 }
 
 export async function updatePerson(id: string, data: Partial<{
-  name: string; email: string; area: string; position: string;
-  locationId: string; notes: string; active: boolean;
+  tenantId: string; name: string; email: string; area: string; position: string;
+  locationId: string | null; notes: string; active: boolean;
 }>) {
   const session = await auth()
   if (!session) throw new Error('Unauthorized')
