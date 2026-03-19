@@ -40,11 +40,12 @@ export async function getMonitoringZones(tenantId: string) {
   return prisma.monitoringZone.findMany({
     where: { integrationId: integration.id, active: true },
     orderBy: { name: 'asc' },
+    include: { location: { select: { id: true, site: true, area: true } } },
   })
 }
 
 export async function createMonitoringZone(tenantId: string, data: {
-  name: string; zabbixProxyId?: string; zabbixProxyName?: string;
+  name: string; locationId?: string; zabbixProxyId?: string; zabbixProxyName?: string;
   wireguardEndpoint?: string; wireguardPubKey?: string; notes?: string;
 }) {
   const session = await auth()
@@ -64,7 +65,7 @@ export async function createMonitoringZone(tenantId: string, data: {
 }
 
 export async function updateMonitoringZone(id: string, data: Partial<{
-  name: string; zabbixProxyId: string; zabbixProxyName: string;
+  name: string; locationId: string; zabbixProxyId: string; zabbixProxyName: string;
   wireguardEndpoint: string; wireguardPubKey: string; notes: string; active: boolean;
 }>) {
   const session = await auth()

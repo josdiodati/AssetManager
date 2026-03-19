@@ -7,36 +7,50 @@ import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
-import { Plus, Pencil, Trash2, ArrowLeft } from 'lucide-react'
+import { Plus, Pencil, Trash2, ArrowLeft, Cpu } from 'lucide-react'
 import { createMonitoringZone, updateMonitoringZone, deleteMonitoringZone } from '@/lib/actions/monitoring'
 import { toast } from 'sonner'
 import Link from 'next/link'
 
+type LocationRef = { id: string; site: string; area: string | null }
 type Zone = {
-  id: string; name: string; zabbixProxyId: string | null; zabbixProxyName: string | null;
-  wireguardEndpoint: string | null; wireguardPubKey: string | null; notes: string | null; active: boolean;
+  id: string; name: string; locationId: string | null;
+  zabbixProxyId: string | null; zabbixProxyName: string | null;
+  wireguardEndpoint: string | null; wireguardPubKey: string | null;
+  notes: string | null; active: boolean;
+  location: LocationRef | null;
 }
 type Tenant = { id: string; name: string }
 
-export function MonitoringZonesClient({ zones, tenants, defaultTenantId, currentRole }: {
-  zones: Zone[]; tenants: Tenant[]; defaultTenantId: string; currentRole: string
+export function MonitoringZonesClient({ zones, tenants, locations, defaultTenantId, currentRole }: {
+  zones: Zone[]; tenants: Tenant[]; locations: LocationRef[]; defaultTenantId: string; currentRole: string
 }) {
   const router = useRouter()
   const [modal, setModal] = useState<{ mode: 'create' | 'edit'; zone?: Zone } | null>(null)
   const [loading, setLoading] = useState(false)
   const [selectedTenant, setSelectedTenant] = useState(defaultTenantId)
   const [form, setForm] = useState({
-    name: '', zabbixProxyId: '', zabbixProxyName: '',
+    name: '', locationId: '', zabbixProxyId: '', zabbixProxyName: '',
     wireguardEndpoint: '', wireguardPubKey: '', notes: '',
   })
 
+  // Locations already used by other monitoreadores (exclude from create, allow current in edit)
+  const usedLocationIds = zones.map(z => z.locationId).filter(Boolean) as string[]
+
+  function availableLocations(editingZone?: Zone) {
+    return locations.filter(l =>
+      !usedLocationIds.includes(l.id) || l.id === editingZone?.locationId
+    )
+  }
+
   function openCreate() {
-    setForm({ name: '', zabbixProxyId: '', zabbixProxyName: '', wireguardEndpoint: '', wireguardPubKey: '', notes: '' })
+    setForm({ name: '', locationId: '', zabbixProxyId: '', zabbixProxyName: '', wireguardEndpoint: '', wireguardPubKey: '', notes: '' })
     setModal({ mode: 'create' })
   }
   function openEdit(z: Zone) {
     setForm({
       name: z.name,
+      locationId: z.locationId ?? '',
       zabbixProxyId: z.zabbixProxyId ?? '',
       zabbixProxyName: z.zabbixProxyName ?? '',
       wireguardEndpoint: z.wireguardEndpoint ?? '',
@@ -51,26 +65,21 @@ export function MonitoringZonesClient({ zones, tenants, defaultTenantId, current
     if (!selectedTenant) { toast.error('Seleccioná un cliente'); return }
     setLoading(true)
     try {
+      const data = {
+        name: form.name,
+        locationId: form.locationId || undefined,
+        zabbixProxyId: form.zabbixProxyId || undefined,
+        zabbixProxyName: form.zabbixProxyName || undefined,
+        wireguardEndpoint: form.wireguardEndpoint || undefined,
+        wireguardPubKey: form.wireguardPubKey || undefined,
+        notes: form.notes || undefined,
+      }
       if (modal?.mode === 'create') {
-        await createMonitoringZone(selectedTenant, {
-          name: form.name,
-          zabbixProxyId: form.zabbixProxyId || undefined,
-          zabbixProxyName: form.zabbixProxyName || undefined,
-          wireguardEndpoint: form.wireguardEndpoint || undefined,
-          wireguardPubKey: form.wireguardPubKey || undefined,
-          notes: form.notes || undefined,
-        })
-        toast.success('Zona creada')
+        await createMonitoringZone(selectedTenant, data)
+        toast.success('Monitoreador creado')
       } else if (modal?.zone) {
-        await updateMonitoringZone(modal.zone.id, {
-          name: form.name,
-          zabbixProxyId: form.zabbixProxyId || undefined,
-          zabbixProxyName: form.zabbixProxyName || undefined,
-          wireguardEndpoint: form.wireguardEndpoint || undefined,
-          wireguardPubKey: form.wireguardPubKey || undefined,
-          notes: form.notes || undefined,
-        })
-        toast.success('Zona actualizada')
+        await updateMonitoringZone(modal.zone.id, data)
+        toast.success('Monitoreador actualizado')
       }
       setModal(null)
       router.refresh()
@@ -79,9 +88,14 @@ export function MonitoringZonesClient({ zones, tenants, defaultTenantId, current
   }
 
   async function handleDelete(id: string) {
-    if (!confirm('¿Desactivar esta zona?')) return
-    try { await deleteMonitoringZone(id); toast.success('Zona desactivada'); router.refresh() }
+    if (!confirm('¿Desactivar este monitoreador?')) return
+    try { await deleteMonitoringZone(id); toast.success('Monitoreador desactivado'); router.refresh() }
     catch (e: any) { toast.error(e.message) }
+  }
+
+  function locationLabel(l: LocationRef | null) {
+    if (!l) return '—'
+    return l.site + (l.area ? ` / ${l.area}` : '')
   }
 
   return (
@@ -92,11 +106,11 @@ export function MonitoringZonesClient({ zones, tenants, defaultTenantId, current
             <Button variant="ghost" size="sm"><ArrowLeft className="h-4 w-4 mr-1" />Monitoreo</Button>
           </Link>
           <div>
-            <h1 className="text-2xl font-bold">Zonas de Monitoreo</h1>
-            <p className="text-muted-foreground mt-1">Sites con Zabbix Proxy conectados via WireGuard</p>
+            <h1 className="text-2xl font-bold flex items-center gap-2"><Cpu className="h-6 w-6 text-blue-600" />Monitoreadores</h1>
+            <p className="text-muted-foreground mt-1">Dispositivos de monitoreo (Raspberry Pi) en ubicaciones del cliente</p>
           </div>
         </div>
-        <Button onClick={openCreate}><Plus className="h-4 w-4 mr-2" />Nueva Zona</Button>
+        <Button onClick={openCreate}><Plus className="h-4 w-4 mr-2" />Agregar Monitoreador</Button>
       </div>
 
       {currentRole === 'SUPER_ADMIN' && tenants.length > 0 && (
@@ -114,9 +128,10 @@ export function MonitoringZonesClient({ zones, tenants, defaultTenantId, current
       <DataTable
         data={zones}
         searchKeys={['name', 'zabbixProxyName']}
-        searchPlaceholder="Buscar zona..."
+        searchPlaceholder="Buscar monitoreador..."
         columns={[
           { key: 'name', header: 'Nombre' },
+          { key: 'location', header: 'Ubicación', render: (r: Zone) => locationLabel(r.location) },
           { key: 'zabbixProxyName', header: 'Zabbix Proxy', render: (r: Zone) => r.zabbixProxyName ?? '—' },
           { key: 'wireguardEndpoint', header: 'WireGuard', render: (r: Zone) => r.wireguardEndpoint ?? '—' },
           { key: 'notes', header: 'Notas', render: (r: Zone) => r.notes ?? '' },
@@ -129,11 +144,23 @@ export function MonitoringZonesClient({ zones, tenants, defaultTenantId, current
         )}
       />
 
-      <ModalForm open={!!modal} onClose={() => setModal(null)} title={modal?.mode === 'create' ? 'Nueva Zona' : 'Editar Zona'} onSubmit={handleSubmit} loading={loading}>
+      <ModalForm open={!!modal} onClose={() => setModal(null)} title={modal?.mode === 'create' ? 'Nuevo Monitoreador' : 'Editar Monitoreador'} onSubmit={handleSubmit} loading={loading}>
         <div className="space-y-3">
           <div className="space-y-2">
             <Label>Nombre *</Label>
-            <Input value={form.name} onChange={e => setForm(f => ({ ...f, name: e.target.value }))} placeholder="Sede Central, DC Norte..." autoFocus />
+            <Input value={form.name} onChange={e => setForm(f => ({ ...f, name: e.target.value }))} placeholder="Raspberry Oficina Central, Probe DC Norte..." autoFocus />
+          </div>
+          <div className="space-y-2">
+            <Label>Ubicación</Label>
+            <Select value={form.locationId || '__none__'} onValueChange={v => setForm(f => ({ ...f, locationId: v === '__none__' ? '' : v }))}>
+              <SelectTrigger><SelectValue placeholder="Seleccionar ubicación" /></SelectTrigger>
+              <SelectContent>
+                <SelectItem value="__none__">Sin ubicación asignada</SelectItem>
+                {availableLocations(modal?.zone).map(l => (
+                  <SelectItem key={l.id} value={l.id}>{l.site}{l.area ? ` / ${l.area}` : ''}</SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
           </div>
           <div className="grid grid-cols-2 gap-3">
             <div className="space-y-2">
@@ -148,7 +175,7 @@ export function MonitoringZonesClient({ zones, tenants, defaultTenantId, current
           <div className="grid grid-cols-2 gap-3">
             <div className="space-y-2">
               <Label>WireGuard Endpoint</Label>
-              <Input value={form.wireguardEndpoint} onChange={e => setForm(f => ({ ...f, wireguardEndpoint: e.target.value }))} placeholder="10.0.0.2:51820" />
+              <Input value={form.wireguardEndpoint} onChange={e => setForm(f => ({ ...f, wireguardEndpoint: e.target.value }))} placeholder="10.13.13.X" />
             </div>
             <div className="space-y-2">
               <Label>WireGuard Public Key</Label>

@@ -3,6 +3,7 @@ import { getAssetTypes } from '@/lib/actions/asset-types'
 import { getBrandsWithModels } from '@/lib/actions/brands'
 import { getLocations } from '@/lib/actions/locations'
 import { getTenants } from '@/lib/actions/tenants'
+import { getMonitoringZones, getAssetMonitoring } from '@/lib/actions/monitoring'
 import { auth } from '@/lib/auth'
 import { redirect, notFound } from 'next/navigation'
 import { AssetForm } from '../../asset-form'
@@ -17,11 +18,13 @@ export default async function EditAssetPage({ params }: { params: Promise<{ id: 
     const asset = await getAsset(id)
     const tenantId = asset.tenantId
 
-    const [assetTypes, brands, locations, tenants] = await Promise.all([
+    const [assetTypes, brands, locations, tenants, monitoringZones, assetMonitoring] = await Promise.all([
       getAssetTypes(tenantId),
       getBrandsWithModels(),
       getLocations(tenantId),
       session?.user.role === 'SUPER_ADMIN' ? getTenants() : Promise.resolve([]),
+      getMonitoringZones(tenantId),
+      getAssetMonitoring(id),
     ])
 
     const initialData = {
@@ -62,6 +65,8 @@ export default async function EditAssetPage({ params }: { params: Promise<{ id: 
         defaultTenantId={tenantId}
         currentRole={session?.user.role ?? ''}
         initialData={initialData}
+        monitoringZones={monitoringZones}
+        assetMonitoring={assetMonitoring}
       />
     )
   } catch {

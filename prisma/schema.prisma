@@ -289,6 +289,7 @@ model Location {
   tenant  Tenant   @relation(fields: [tenantId], references: [id])
   assets  Asset[]
   persons Person[]
+  monitoringZone MonitoringZone?
 
   @@index([tenantId])
   @@index([deletedAt])
@@ -582,6 +583,7 @@ model MonitoringIntegration {
 model MonitoringZone {
   id                String   @id @default(uuid())
   integrationId     String
+  locationId        String?   @unique
   name              String
   zabbixProxyId     String?
   zabbixProxyName   String?
@@ -593,9 +595,11 @@ model MonitoringZone {
   updatedAt         DateTime @updatedAt
 
   integration    MonitoringIntegration @relation(fields: [integrationId], references: [id])
+  location       Location?             @relation(fields: [locationId], references: [id])
   assetMonitoring AssetMonitoring[]
 
   @@index([integrationId])
+  @@index([locationId])
 }
 
 model MonitoringTemplate {

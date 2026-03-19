@@ -77,7 +77,7 @@ export function MonitoringConfigClient({ integration, tenants, defaultTenantId, 
       {/* Quick links */}
       <div className="flex gap-3">
         <Link href="/admin/monitoring/zones">
-          <Button variant="outline" size="sm"><MapPin className="h-4 w-4 mr-2" />Zonas</Button>
+          <Button variant="outline" size="sm"><MapPin className="h-4 w-4 mr-2" />Monitoreadores</Button>
         </Link>
         <Link href="/admin/monitoring/templates">
           <Button variant="outline" size="sm"><FileStack className="h-4 w-4 mr-2" />Templates</Button>
