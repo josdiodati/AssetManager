@@ -197,3 +197,17 @@ export async function upsertAssetMonitoring(assetId: string, data: {
   revalidatePath(`/assets/${assetId}`)
   return result
 }
+
+// ─── Grafana Provisioning ────────────────────────────────────────────────────
+
+export async function provisionGrafana(tenantId: string) {
+  const session = await auth()
+  if (!session || !['SUPER_ADMIN', 'INTERNAL_ADMIN'].includes(session.user.role)) {
+    throw new Error('Unauthorized')
+  }
+
+  const { provisionGrafanaForTenant } = await import('@/lib/grafana-client')
+  const result = await provisionGrafanaForTenant(tenantId)
+  revalidatePath('/admin/monitoring')
+  return result
+}
