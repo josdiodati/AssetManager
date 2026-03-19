@@ -156,6 +156,7 @@ model Tenant {
   acceptanceTemplates AcceptanceTemplate[]
   notifications       Notification[]
   auditLogs           AuditLog[]
+  monitoringIntegration MonitoringIntegration?
 
   @@index([slug])
   @@index([deletedAt])
@@ -228,6 +229,7 @@ model AssetType {
   categoryId             String
   requiresApproval       Boolean       @default(false)
   allowsPersonAssignment Boolean       @default(true)
+  isMonitorable          Boolean       @default(false)
   fieldConfig            Json          @default("{}")
   active                 Boolean       @default(true)
   createdAt              DateTime      @default(now())
@@ -354,6 +356,7 @@ model Asset {
   approvalEvents   ApprovalEvent[]
   acceptanceTokens AcceptanceToken[]
   documents        AssetDocument[]
+  monitoring        AssetMonitoring?
   notifications    Notification[]
 
   @@unique([tenantId, assetTag])
@@ -537,4 +540,95 @@ model PdfTemplate {
   updatedAt DateTime @updatedAt
 
   @@index([tenantId])
+}
+
+// ─── Monitoring ───────────────────────────────────────────────────────────────
+
+enum MonitoringStatus {
+  PENDING
+  SYNCING
+  ACTIVE
+  ERROR
+  DISABLED
+}
+
+enum MonitoringProtocol {
+  AGENT
+  SNMP
+  ICMP
+  JMX
+  SSH
+}
+
+model MonitoringIntegration {
+  id                  String   @id @default(uuid())
+  tenantId            String   @unique
+  zabbixUrl           String
+  zabbixApiToken      String
+  zabbixHostGroupId   String?
+  zabbixHostGroupName String?
+  grafanaUrl          String?
+  grafanaOrgId        Int?
+  grafanaApiToken     String?
+  grafanaDashboardUid String?
+  enabled             Boolean  @default(true)
+  createdAt           DateTime @default(now())
+  updatedAt           DateTime @updatedAt
+
+  tenant Tenant @relation(fields: [tenantId], references: [id])
+  zones  MonitoringZone[]
+}
+
+model MonitoringZone {
+  id                String   @id @default(uuid())
+  integrationId     String
+  name              String
+  zabbixProxyId     String?
+  zabbixProxyName   String?
+  wireguardEndpoint String?
+  wireguardPubKey   String?
+  notes             String?
+  active            Boolean  @default(true)
+  createdAt         DateTime @default(now())
+  updatedAt         DateTime @updatedAt
+
+  integration    MonitoringIntegration @relation(fields: [integrationId], references: [id])
+  assetMonitoring AssetMonitoring[]
+
+  @@index([integrationId])
+}
+
+model MonitoringTemplate {
+  id                 String             @id @default(uuid())
+  assetTypeName      String             @unique
+  zabbixTemplateName String
+  zabbixTemplateId   String?
+  protocol           MonitoringProtocol @default(AGENT)
+  defaultPort        Int?
+  snmpCommunity      String?
+  active             Boolean            @default(true)
+  createdAt          DateTime           @default(now())
+  updatedAt          DateTime           @updatedAt
+}
+
+model AssetMonitoring {
+  id                String           @id @default(uuid())
+  assetId           String           @unique
+  zoneId            String?
+  zabbixHostId      String?
+  status            MonitoringStatus @default(PENDING)
+  monitoringEnabled Boolean          @default(true)
+  templateOverride  String?
+  snmpCommunity     String?
+  lastSyncAt        DateTime?
+  lastError         String?
+  createdAt         DateTime         @default(now())
+  updatedAt         DateTime         @updatedAt
+
+  asset Asset          @relation(fields: [assetId], references: [id])
+  zone  MonitoringZone? @relation(fields: [zoneId], references: [id])
+
+  @@index([assetId])
+  @@index([zoneId])
+  @@index([status])
 }

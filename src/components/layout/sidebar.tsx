@@ -4,7 +4,7 @@ import { usePathname, useRouter } from 'next/navigation'
 import { useEffect } from 'react'
 import { cn } from '@/lib/utils'
 import { useSidebar } from './sidebar-context'
-import { LayoutDashboard, Package, Bell, Users, Building2, UserCog, Tag, Truck, MapPin, FileText, Settings, Upload, Mail, ClipboardList, X } from 'lucide-react'
+import { LayoutDashboard, Package, Bell, Users, Building2, UserCog, Tag, Truck, MapPin, FileText, Settings, Upload, Mail, ClipboardList, X, Activity } from 'lucide-react'
 
 interface NavItem { href: string; label: string; icon: React.ComponentType<{ className?: string }>; roles?: string[] }
 
@@ -22,6 +22,7 @@ const adminItems: NavItem[] = [
   { href: '/admin/locations', label: 'Ubicaciones', icon: MapPin, roles: ['SUPER_ADMIN', 'INTERNAL_ADMIN'] },
   { href: '/admin/templates', label: 'Templates', icon: FileText, roles: ['SUPER_ADMIN', 'INTERNAL_ADMIN'] },
   { href: '/admin/config', label: 'Configuración', icon: Settings, roles: ['SUPER_ADMIN', 'INTERNAL_ADMIN'] },
+  { href: '/admin/monitoring', label: 'Monitoreo', icon: Activity, roles: ['SUPER_ADMIN', 'INTERNAL_ADMIN'] },
 ]
 const opsItems: NavItem[] = [
   { href: '/import', label: 'Importar', icon: Upload, roles: ['SUPER_ADMIN', 'INTERNAL_ADMIN'] },
