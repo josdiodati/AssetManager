@@ -49,12 +49,14 @@ export function DashboardClient({
   currentRole,
   initialTenantId,
   tenants = [],
+  monitoringStats,
 }: {
   data: DashboardData
   chartData: ChartData
   currentRole: string
   initialTenantId: string | null
   tenants?: { id: string; name: string }[]
+  monitoringStats?: { total: number; active: number; pending: number; error: number; disabled: number } | null
 }) {
   const showSelector = currentRole === 'SUPER_ADMIN' || currentRole === 'INTERNAL_ADMIN'
 

@@ -1,6 +1,7 @@
 import { auth } from '@/lib/auth'
 import { getDashboardStats, getDashboardChartData } from '@/lib/actions/dashboard'
 import { getTenantsForAdmins } from '@/lib/actions/tenants'
+import { getMonitoringStats } from '@/lib/actions/monitoring-reconcile'
 import { DashboardClient } from './dashboard-client'
 
 export default async function DashboardPage() {
@@ -11,12 +12,13 @@ export default async function DashboardPage() {
     ? session?.user.tenantId
     : session?.user.activeTenantId
 
-  const [data, chartData, tenants] = await Promise.all([
+  const [data, chartData, tenants, monitoringStats] = await Promise.all([
     getDashboardStats(tenantId),
     getDashboardChartData(tenantId ?? null),
     (role === 'SUPER_ADMIN' || role === 'INTERNAL_ADMIN')
       ? getTenantsForAdmins()
       : Promise.resolve([]),
+    tenantId ? getMonitoringStats(tenantId) : Promise.resolve(null),
   ])
 
   return (
@@ -26,6 +28,7 @@ export default async function DashboardPage() {
       currentRole={role}
       initialTenantId={tenantId ?? null}
       tenants={tenants.map(t => ({ id: t.id, name: t.name }))}
+      monitoringStats={monitoringStats}
     />
   )
 }
