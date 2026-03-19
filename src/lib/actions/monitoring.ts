@@ -1,4 +1,5 @@
 'use server'
+import { syncAssetToZabbix, unsyncAssetFromZabbix } from "@/lib/zabbix-client"
 import { prisma } from '@/lib/prisma'
 import { auth } from '@/lib/auth'
 import { revalidatePath } from 'next/cache'
@@ -151,18 +152,24 @@ export async function upsertAssetMonitoring(assetId: string, data: {
   }
 
   if (!data.monitoringEnabled) {
-    // Disable: update status to DISABLED if it exists
+    // Disable monitoring — also disable in Zabbix if it was synced
     const existing = await prisma.assetMonitoring.findUnique({ where: { assetId } })
     if (existing) {
-      await prisma.assetMonitoring.update({
-        where: { assetId },
-        data: { monitoringEnabled: false, status: 'DISABLED' },
-      })
+      if (existing.zabbixHostId) {
+        // Fire-and-forget: disable in Zabbix (don't block on errors)
+        unsyncAssetFromZabbix(assetId).catch(console.error)
+      } else {
+        await prisma.assetMonitoring.update({
+          where: { assetId },
+          data: { monitoringEnabled: false, status: 'DISABLED' },
+        })
+      }
     }
     revalidatePath(`/assets/${assetId}`)
     return null
   }
 
+  // Enable or update monitoring
   const result = await prisma.assetMonitoring.upsert({
     where: { assetId },
     create: {
@@ -181,6 +188,12 @@ export async function upsertAssetMonitoring(assetId: string, data: {
       snmpCommunity: data.snmpCommunity || null,
     },
   })
+
+  // Trigger Zabbix sync (async, don't block the UI)
+  syncAssetToZabbix(assetId).catch(err => {
+    console.error(`[Zabbix Sync] Failed for asset ${assetId}:`, err)
+  })
+
   revalidatePath(`/assets/${assetId}`)
   return result
 }
