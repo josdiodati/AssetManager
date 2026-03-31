@@ -8,23 +8,43 @@ import { revalidatePath } from 'next/cache'
 export async function getAssetTypeMasters() {
   return prisma.assetTypeMaster.findMany({
     where: { active: true },
-    orderBy: { name: 'asc' },
+    include: { category: true },
+    orderBy: [{ name: 'asc' }],
   })
 }
 
-export async function createAssetTypeMaster(name: string) {
+export async function createAssetTypeMaster(data: { name: string; categoryId: string }) {
   const session = await auth()
   if (!session || session.user.role !== 'SUPER_ADMIN') throw new Error('Unauthorized')
-  const item = await prisma.assetTypeMaster.create({ data: { name: name.trim() } })
+
+  const item = await prisma.assetTypeMaster.create({
+    data: {
+      name: data.name.trim(),
+      categoryId: data.categoryId,
+    },
+    include: { category: true },
+  })
+
   revalidatePath('/admin/config')
+  revalidatePath('/admin/asset-types')
   return item
 }
 
-export async function updateAssetTypeMaster(id: string, name: string) {
+export async function updateAssetTypeMaster(id: string, data: { name: string; categoryId: string }) {
   const session = await auth()
   if (!session || session.user.role !== 'SUPER_ADMIN') throw new Error('Unauthorized')
-  const item = await prisma.assetTypeMaster.update({ where: { id }, data: { name: name.trim() } })
+
+  const item = await prisma.assetTypeMaster.update({
+    where: { id },
+    data: {
+      name: data.name.trim(),
+      categoryId: data.categoryId,
+    },
+    include: { category: true },
+  })
+
   revalidatePath('/admin/config')
+  revalidatePath('/admin/asset-types')
   return item
 }
 
@@ -33,6 +53,7 @@ export async function deleteAssetTypeMaster(id: string) {
   if (!session || session.user.role !== 'SUPER_ADMIN') throw new Error('Unauthorized')
   await prisma.assetTypeMaster.update({ where: { id }, data: { active: false } })
   revalidatePath('/admin/config')
+  revalidatePath('/admin/asset-types')
 }
 
 // ─── AssetCategory ────────────────────────────────────────────────────────────
