@@ -4,6 +4,7 @@ import { useRouter } from 'next/navigation'
 import { DataTable } from '@/components/ui/data-table'
 import { ModalForm } from '@/components/ui/modal-form'
 import { Button } from '@/components/ui/button'
+import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { Plus, Pencil } from 'lucide-react'
@@ -11,12 +12,6 @@ import { createAssetType, updateAssetType } from '@/lib/actions/asset-types'
 import { toast } from 'sonner'
 
 type Category = { id: string; code: string; name: string }
-type TypeName = {
-  id: string
-  name: string
-  categoryId: string
-  category: Category
-}
 type AssetType = {
   id: string
   name: string
@@ -29,11 +24,9 @@ type AssetType = {
 
 export function AssetTypesClient({
   assetTypes,
-  typeNames = [],
   categories = [],
 }: {
   assetTypes: AssetType[]
-  typeNames?: TypeName[]
   categories?: Category[]
 }) {
   const router = useRouter()
@@ -56,24 +49,24 @@ export function AssetTypesClient({
     setModal({ mode: 'edit', type: t })
   }
 
-  function handleTypeNameChange(name: string) {
-    const selectedType = typeNames.find(type => type.name === name)
-    setForm(current => ({
-      ...current,
-      name,
-      categoryId: selectedType?.categoryId ?? current.categoryId,
-    }))
-  }
-
   async function handleSubmit() {
+    if (!form.name.trim()) {
+      toast.error('El nombre es obligatorio')
+      return
+    }
+    if (!form.categoryId) {
+      toast.error('La categoría es obligatoria')
+      return
+    }
+
     setLoading(true)
     try {
       if (modal?.mode === 'create') {
-        await createAssetType({ ...form, fieldConfig: {} })
+        await createAssetType({ ...form, name: form.name.trim(), fieldConfig: {} })
         toast.success('Tipo creado')
       } else if (modal?.type) {
         await updateAssetType(modal.type.id, {
-          name: form.name,
+          name: form.name.trim(),
           categoryId: form.categoryId,
           requiresApproval: form.requiresApproval,
           allowsPersonAssignment: form.allowsPersonAssignment,
@@ -94,7 +87,7 @@ export function AssetTypesClient({
       <div className="flex items-center justify-between">
         <div>
           <h1 className="text-2xl font-bold">Tipos de Activos</h1>
-          <p className="text-muted-foreground mt-1">Categorías y configuración de tipos</p>
+          <p className="text-muted-foreground mt-1">Configuración real de tipos y su comportamiento</p>
         </div>
         <Button onClick={openCreate}><Plus className="h-4 w-4 mr-2" />Nuevo Tipo</Button>
       </div>
@@ -105,27 +98,19 @@ export function AssetTypesClient({
         searchPlaceholder="Buscar tipo..."
         columns={[
           { key: 'name', header: 'Nombre' },
-          {
-            key: 'category',
-            header: 'Categoría',
-            render: r => (
-              <span className="inline-flex items-center gap-1.5">
-                <span className="font-medium">{r.category?.name ?? '—'}</span>
-                <span className="text-xs text-muted-foreground font-mono">({r.category?.code})</span>
-              </span>
-            ),
-          },
+          { key: 'category', header: 'Categoría', render: r => (
+            <span className="inline-flex items-center gap-1.5">
+              <span className="font-medium">{r.category?.name ?? '—'}</span>
+              <span className="text-xs text-muted-foreground font-mono">({r.category?.code})</span>
+            </span>
+          )},
           { key: 'requiresApproval', header: 'Requiere Aprobación', render: r => r.requiresApproval ? 'Sí' : 'No' },
           { key: 'allowsPersonAssignment', header: 'Asignable a Persona', render: r => r.allowsPersonAssignment ? 'Sí' : 'No' },
-          {
-            key: 'active',
-            header: 'Estado',
-            render: r => (
-              <span className={`px-2 py-0.5 rounded text-xs font-medium ${r.active ? 'bg-green-100 text-green-800' : 'bg-gray-100 text-gray-600'}`}>
-                {r.active ? 'Activo' : 'Inactivo'}
-              </span>
-            ),
-          },
+          { key: 'active', header: 'Estado', render: r => (
+            <span className={`px-2 py-0.5 rounded text-xs font-medium ${r.active ? 'bg-green-100 text-green-800' : 'bg-gray-100 text-gray-600'}`}>
+              {r.active ? 'Activo' : 'Inactivo'}
+            </span>
+          )},
         ]}
         actions={t => (
           <Button variant="ghost" size="sm" onClick={() => openEdit(t)}><Pencil className="h-4 w-4" /></Button>
@@ -141,16 +126,12 @@ export function AssetTypesClient({
       >
         <div className="space-y-2">
           <Label>Nombre</Label>
-          <Select value={form.name} onValueChange={handleTypeNameChange}>
-            <SelectTrigger><SelectValue placeholder="Seleccionar nombre" /></SelectTrigger>
-            <SelectContent>
-              {typeNames.map(t => (
-                <SelectItem key={t.id} value={t.name}>
-                  {t.name} — {t.category.name} ({t.category.code})
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
+          <Input
+            value={form.name}
+            onChange={e => setForm(f => ({ ...f, name: e.target.value }))}
+            placeholder="Ej: Laptop, Router, Cámara IP"
+            autoFocus
+          />
         </div>
         <div className="space-y-2">
           <Label>Categoría</Label>
@@ -166,23 +147,13 @@ export function AssetTypesClient({
           </Select>
         </div>
         <div className="flex items-center gap-2">
-          <input
-            type="checkbox"
-            id="ra"
-            checked={form.requiresApproval}
-            onChange={e => setForm(f => ({ ...f, requiresApproval: e.target.checked }))}
-            className="rounded"
-          />
+          <input type="checkbox" id="ra" checked={form.requiresApproval}
+            onChange={e => setForm(f => ({ ...f, requiresApproval: e.target.checked }))} className="rounded" />
           <Label htmlFor="ra">Requiere aprobación para asignación</Label>
         </div>
         <div className="flex items-center gap-2">
-          <input
-            type="checkbox"
-            id="ap"
-            checked={form.allowsPersonAssignment}
-            onChange={e => setForm(f => ({ ...f, allowsPersonAssignment: e.target.checked }))}
-            className="rounded"
-          />
+          <input type="checkbox" id="ap" checked={form.allowsPersonAssignment}
+            onChange={e => setForm(f => ({ ...f, allowsPersonAssignment: e.target.checked }))} className="rounded" />
           <Label htmlFor="ap">Permite asignación a persona</Label>
         </div>
       </ModalForm>
