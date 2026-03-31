@@ -11,12 +11,13 @@ import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog'
-import { ArrowLeft, Pencil, UserPlus, UserMinus, CheckCircle, XCircle, Mail, QrCode, Printer , FileText } from 'lucide-react'
+import { ArrowLeft, Pencil, UserPlus, UserMinus, CheckCircle, XCircle, Mail, QrCode, Printer , FileText, ArchiveX } from 'lucide-react'
 import { format } from 'date-fns'
 import { es } from 'date-fns/locale'
 import { assignAsset, unassignAsset, approveAssignment, rejectAssignment } from '@/lib/actions/assignments'
 import { generateAcceptanceToken } from '@/lib/actions/acceptance'
 import { toast } from 'sonner'
+import { decommissionAsset } from '@/lib/actions/assets'
 import QRCodeLib from 'qrcode'
 
 type Person = { id: string; name: string; email: string; area: string | null; position: string | null }
@@ -118,6 +119,9 @@ export function AssetDetail({ asset, currentRole, persons }: {
   const [qrModal, setQrModal] = useState(false)
   const [qrDataUrl, setQrDataUrl] = useState<string>('')
 
+  // Decommission
+  const [decommissionLoading, setDecommissionLoading] = useState(false)
+
   useEffect(() => {
     if (qrModal && !qrDataUrl) {
       const baseUrl = 'https://acceptance.kawellu.com.ar'
@@ -174,6 +178,21 @@ export function AssetDetail({ asset, currentRole, persons }: {
     finally { setRejectLoading(false) }
   }
 
+  async function handleDecommission() {
+    if (!confirm(`¿Decomisionar el activo ${asset.assetTag}? Esta acción lo desactivará y lo quitará de la vista normal.`)) return
+    setDecommissionLoading(true)
+    try {
+      await decommissionAsset(asset.id)
+      toast.success('Activo decomisionado')
+      router.push('/assets')
+      router.refresh()
+    } catch (e: any) {
+      toast.error(e.message ?? 'Error al decomisionar')
+    } finally {
+      setDecommissionLoading(false)
+    }
+  }
+
   async function handleSendAcceptance() {
     if (!confirm(`¿Enviar email de aceptación a ${asset.assignedPerson?.name}?`)) return
     setSendingAcceptance(true)
@@ -191,6 +210,7 @@ export function AssetDetail({ asset, currentRole, persons }: {
   const canAssign = canEdit && (asset.status === 'AVAILABLE' || asset.status === 'IN_REPAIR')
   const canUnassign = canEdit && (asset.status === 'ASSIGNED' || asset.status === 'PENDING_APPROVAL')
   const canApproveReject = canEdit && asset.status === 'PENDING_APPROVAL'
+  const canDecommission = canEdit && !asset.assignedPerson && asset.status !== 'DECOMMISSIONED'
 
   return (
     <div className="space-y-6 max-w-5xl">
@@ -261,6 +281,17 @@ export function AssetDetail({ asset, currentRole, persons }: {
           <Button variant="outline" size="sm" onClick={() => { setQrDataUrl(''); setQrModal(true) }}>
             <QrCode className="h-4 w-4 mr-1" />QR
           </Button>
+          {canDecommission && (
+            <Button
+              variant="outline"
+              size="sm"
+              className="text-red-600 border-red-200 hover:bg-red-50"
+              onClick={handleDecommission}
+              disabled={decommissionLoading}
+            >
+              <ArchiveX className="h-4 w-4 mr-1" />{decommissionLoading ? 'Decomisionando...' : 'Decomisionar'}
+            </Button>
+          )}
           {canEdit && (
             <Link href={`/assets/${asset.id}/edit`}>
               <Button variant="outline"><Pencil className="h-4 w-4 mr-2" />Editar</Button>

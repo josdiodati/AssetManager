@@ -217,6 +217,41 @@ export async function updateAsset(id: string, data: Partial<{
   return asset
 }
 
+export async function decommissionAsset(id: string) {
+  const session = await auth()
+  if (!session || session.user.role === 'CLIENT_ADMIN') throw new Error('Unauthorized')
+
+  const existing = await prisma.asset.findUnique({ where: { id } })
+  if (!existing || existing.deletedAt) throw new Error('Asset not found')
+  if (existing.assignedPersonId) throw new Error('No se puede decomisionar un activo asignado')
+
+  const asset = await prisma.asset.update({
+    where: { id },
+    data: {
+      status: 'DECOMMISSIONED',
+      active: false,
+      deletedAt: new Date(),
+    },
+  })
+
+  await prisma.auditLog.create({
+    data: {
+      tenantId: existing.tenantId,
+      userId: session.user.id,
+      entityType: 'asset',
+      entityId: id,
+      action: 'decommissioned',
+      beforeData: existing as any,
+      afterData: { status: 'DECOMMISSIONED', active: false, deletedAt: true },
+      source: 'WEB',
+    },
+  })
+
+  revalidatePath(`/assets/${id}`)
+  revalidatePath('/assets')
+  return asset
+}
+
 export async function deleteAsset(id: string) {
   const session = await auth()
   if (!session || session.user.role === 'CLIENT_ADMIN') throw new Error('Unauthorized')
