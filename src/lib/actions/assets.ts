@@ -19,7 +19,9 @@ export async function getAssets(filters?: {
   const page = filters?.page ?? 1
   const pageSize = filters?.pageSize ?? 50
 
-  const where: any = { deletedAt: null }
+  const where: any = {}
+  if (filters?.status === 'DECOMMISSIONED') where.deletedAt = { not: null }
+  else where.deletedAt = null
   if (tenantId) where.tenantId = tenantId
   if (filters?.status) where.status = filters.status
   if (filters?.assetTypeId) where.assetTypeId = filters.assetTypeId

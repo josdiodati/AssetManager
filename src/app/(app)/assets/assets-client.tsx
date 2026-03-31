@@ -7,8 +7,6 @@ import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { Plus, Search, ExternalLink, ChevronLeft, ChevronRight, Download } from 'lucide-react'
-import { deleteAsset } from '@/lib/actions/assets'
-import { toast } from 'sonner'
 
 const statusOptions = [
   { value: 'AVAILABLE', label: 'Disponible' },
@@ -64,8 +62,6 @@ export function AssetsClient({
   }, [pathname, router, searchParams])
 
   const totalPages = Math.ceil(total / pageSize)
-  const canDelete = currentRole !== 'CLIENT_ADMIN'
-
   function buildExportUrl() {
     const params = new URLSearchParams()
     if (filters.status) params.set('status', filters.status)
@@ -75,21 +71,12 @@ export function AssetsClient({
     return `/api/export/assets${qs ? '?' + qs : ''}`
   }
 
-  async function handleDelete(id: string, tag: string) {
-    if (!confirm(`¿Dar de baja el activo ${tag}? Esta acción es reversible.`)) return
-    try {
-      await deleteAsset(id)
-      toast.success('Activo dado de baja')
-      router.refresh()
-    } catch (e: any) { toast.error(e.message) }
-  }
-
   return (
     <div className="space-y-5">
       <div className="flex items-center justify-between">
         <div>
           <h1 className="text-2xl font-bold">Activos</h1>
-          <p className="text-muted-foreground mt-1">{total} activo{total !== 1 ? 's' : ''} en total</p>
+          <p className="text-muted-foreground mt-1">{total} activo{total !== 1 ? 's' : ''} {filters.status === 'DECOMMISSIONED' ? 'decomisionado' + (total !== 1 ? 's' : '') : 'en total'}</p>
         </div>
         <div className="flex items-center gap-2">
           <a href={buildExportUrl()} download>
@@ -98,11 +85,9 @@ export function AssetsClient({
               Exportar Excel
             </Button>
           </a>
-          {canDelete && (
-            <Link href="/assets/new">
-              <Button><Plus className="h-4 w-4 mr-2" />Nuevo Activo</Button>
-            </Link>
-          )}
+          <Link href="/assets/new">
+            <Button><Plus className="h-4 w-4 mr-2" />Nuevo Activo</Button>
+          </Link>
         </div>
       </div>
 
