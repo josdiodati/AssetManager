@@ -16,9 +16,9 @@ import Link from 'next/link'
 
 type AssetType = { id: string; name: string; categoryId: string; category: { code: string; name: string }; requiresApproval: boolean; isMonitorable: boolean; fieldConfig: any }
 type Brand = { id: string; name: string; models: { id: string; name: string }[] }
-type Location = { id: string; site: string; area: string | null; detail: string | null }
+type Location = { id: string; site: string; area: string | null; detail: string | null; tenantId?: string }
 type Tenant = { id: string; name: string }
-type MonitoringZoneRef = { id: string; name: string; location: { id: string; site: string; area: string | null } | null }
+type MonitoringZoneRef = { id: string; name: string; location: { id: string; site: string; area: string | null } | null; tenantId?: string }
 type AssetMonitoringData = { monitoringEnabled: boolean; zoneId: string | null; templateOverride: string | null; snmpCommunity: string | null; monitoringIpAddress?: string | null; monitoringHostname?: string | null; status: string } | null
 type MonitoringTemplateOption = { id: string; assetTypeName: string; zabbixTemplateName: string; protocol: string; description: string | null }
 
@@ -100,6 +100,13 @@ export function AssetForm({ mode, assetId, assetTypes, brands, locations, tenant
   const [monSnmp, setMonSnmp] = useState(assetMonitoring?.snmpCommunity ?? '')
   const [monIp, setMonIp] = useState(assetMonitoring?.monitoringIpAddress ?? initialData?.ipAddress ?? '')
   const [monHostname, setMonHostname] = useState(assetMonitoring?.monitoringHostname ?? initialData?.hostname ?? '')
+
+  const filteredLocations = form.tenantId
+    ? locations.filter(l => !l.tenantId || l.tenantId === form.tenantId)
+    : locations
+  const filteredZones = form.tenantId
+    ? monitoringZones.filter(z => !z.tenantId || z.tenantId === form.tenantId)
+    : monitoringZones
 
   const selectedType = assetTypes.find(t => t.id === form.assetTypeId)
   const selectedMonTemplate = monitoringTemplates.find(t => t.zabbixTemplateName === monTemplate)
@@ -194,7 +201,13 @@ export function AssetForm({ mode, assetId, assetTypes, brands, locations, tenant
                 {currentRole === 'SUPER_ADMIN' && tenants.length > 0 && (
                   <div className="space-y-2 col-span-2">
                     <Label>Cliente *</Label>
-                    <Select value={form.tenantId} onValueChange={v => set('tenantId', v)}>
+                    <Select value={form.tenantId} onValueChange={v => {
+                      set('tenantId', v)
+                      const locBelongs = locations.find(l => l.id === form.locationId && (!l.tenantId || l.tenantId === v))
+                      if (!locBelongs) set('locationId', '')
+                      const zoneBelongs = monitoringZones.find(z => z.id === monZoneId && (!z.tenantId || z.tenantId === v))
+                      if (!zoneBelongs) setMonZoneId('')
+                    }}>
                       <SelectTrigger><SelectValue placeholder="Seleccionar cliente" /></SelectTrigger>
                       <SelectContent>{tenants.map(t => <SelectItem key={t.id} value={t.id}>{t.name}</SelectItem>)}</SelectContent>
                     </Select>
@@ -250,7 +263,7 @@ export function AssetForm({ mode, assetId, assetTypes, brands, locations, tenant
                     <SelectTrigger><SelectValue placeholder="Seleccionar ubicación" /></SelectTrigger>
                     <SelectContent>
                       <SelectItem value="__none__">Sin ubicación</SelectItem>
-                      {locations.map(l => <SelectItem key={l.id} value={l.id}>{l.site}{l.area ? ` / ${l.area}` : ''}</SelectItem>)}
+                      {filteredLocations.map(l => <SelectItem key={l.id} value={l.id}>{l.site}{l.area ? ` / ${l.area}` : ''}</SelectItem>)}
                     </SelectContent>
                   </Select>
                 </div>
@@ -345,14 +358,14 @@ export function AssetForm({ mode, assetId, assetTypes, brands, locations, tenant
                         <SelectTrigger><SelectValue placeholder="Seleccionar monitoreador" /></SelectTrigger>
                         <SelectContent>
                           <SelectItem value="__none__">Seleccionar...</SelectItem>
-                          {monitoringZones.map(z => (
+                          {filteredZones.map(z => (
                             <SelectItem key={z.id} value={z.id}>
                               {z.name}{z.location ? ` — ${z.location.site}${z.location.area ? ` / ${z.location.area}` : ''}` : ''}
                             </SelectItem>
                           ))}
                         </SelectContent>
                       </Select>
-                      {monitoringZones.length === 0 && (
+                      {filteredZones.length === 0 && (
                         <p className="text-sm text-orange-600">
                           No hay monitoreadores configurados para este cliente.{' '}
                           <Link href="/admin/monitoring" className="underline">Ver configuración YAML</Link>

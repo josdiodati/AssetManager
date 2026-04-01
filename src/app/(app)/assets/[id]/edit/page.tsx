@@ -18,13 +18,12 @@ export default async function EditAssetPage({ params }: { params: Promise<{ id: 
   try {
     const asset = await getAsset(id)
     const tenantId = asset.tenantId
+    const isSuperAdmin = session?.user.role === 'SUPER_ADMIN'
 
-    const [assetTypes, brands, locations, tenants, monitoringZones, assetMonitoring, monitoringTemplates] = await Promise.all([
+    const [assetTypes, brands, tenants, assetMonitoring, monitoringTemplates] = await Promise.all([
       getAssetTypes(tenantId),
       getBrandsWithModels(),
-      getLocations(tenantId),
-      session?.user.role === 'SUPER_ADMIN' ? getTenants() : Promise.resolve([]),
-      getMonitoringZones(tenantId),
+      isSuperAdmin ? getTenants() : Promise.resolve([]),
       getAssetMonitoring(id),
       prisma.monitoringTemplate.findMany({
         where: { active: true },
@@ -38,6 +37,25 @@ export default async function EditAssetPage({ params }: { params: Promise<{ id: 
         },
       }),
     ])
+
+    const locations = isSuperAdmin
+      ? await prisma.location.findMany({
+          where: { active: true, deletedAt: null },
+          orderBy: [{ site: 'asc' }, { area: 'asc' }],
+          select: { id: true, site: true, area: true, detail: true, tenantId: true },
+        })
+      : await getLocations(tenantId)
+
+    const monitoringZones = isSuperAdmin
+      ? await prisma.monitoringZone.findMany({
+          where: { active: true },
+          orderBy: { name: 'asc' },
+          include: {
+            location: { select: { id: true, site: true, area: true } },
+            integration: { select: { tenantId: true } },
+          },
+        }).then(zones => zones.map(({ integration, ...zone }) => ({ ...zone, tenantId: integration.tenantId })))
+      : await getMonitoringZones(tenantId)
 
     const initialData = {
       tenantId: asset.tenantId,
