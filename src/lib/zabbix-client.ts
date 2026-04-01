@@ -472,7 +472,7 @@ export async function getHostDetail(config: ZabbixConfig, hostId: string): Promi
 export async function getHostsHealthBatch(config: ZabbixConfig, hostIds: string[]): Promise<HostHealth[]> {
   if (hostIds.length === 0) return []
 
-  const [hosts, problems] = await Promise.all([
+  const [hosts, ...problemResults] = await Promise.all([
     rpc<Array<{
       hostid: string
       host: string
@@ -491,24 +491,21 @@ export async function getHostsHealthBatch(config: ZabbixConfig, hostIds: string[
       output: ['hostid', 'host', 'name', 'status', 'active_available'],
       selectInterfaces: ['interfaceid', 'type', 'ip', 'port', 'available'],
     }),
-    rpc<ZabbixHostProblem[]>(config, 'problem.get', {
-      hostids: hostIds,
-      recent: true,
-      output: ['eventid', 'objectid', 'name', 'severity'],
-      selectHosts: ['hostid'],
-      sortfield: ['severity'],
-      sortorder: ['DESC'],
-    }),
+    // Fetch problems per host individually to avoid unsupported selectHosts in Zabbix 7.2
+    ...hostIds.map((hostId) =>
+      rpc<ZabbixHostProblem[]>(config, 'problem.get', {
+        hostids: [hostId],
+        recent: true,
+        output: ['eventid', 'objectid', 'name', 'severity'],
+        sortfield: 'eventid',
+        sortorder: 'DESC',
+      }).then((problems) => ({ hostId, problems }))
+    ),
   ])
 
   const problemsByHost = new Map<string, ZabbixHostProblem[]>()
-  for (const problem of problems) {
-    const linkedHosts = problem.hosts ?? []
-    for (const linkedHost of linkedHosts) {
-      const list = problemsByHost.get(linkedHost.hostid) ?? []
-      list.push(problem)
-      problemsByHost.set(linkedHost.hostid, list)
-    }
+  for (const result of problemResults) {
+    problemsByHost.set(result.hostId, result.problems)
   }
 
   return hosts.map((host) => {
