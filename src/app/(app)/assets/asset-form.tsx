@@ -20,6 +20,7 @@ type Location = { id: string; site: string; area: string | null; detail: string 
 type Tenant = { id: string; name: string }
 type MonitoringZoneRef = { id: string; name: string; location: { id: string; site: string; area: string | null } | null }
 type AssetMonitoringData = { monitoringEnabled: boolean; zoneId: string | null; templateOverride: string | null; snmpCommunity: string | null; monitoringIpAddress?: string | null; monitoringHostname?: string | null; status: string } | null
+type MonitoringTemplateOption = { id: string; assetTypeName: string; zabbixTemplateName: string; protocol: string; description: string | null }
 
 interface AssetFormProps {
   mode: 'create' | 'edit'
@@ -32,6 +33,7 @@ interface AssetFormProps {
   currentRole: string
   initialData?: Partial<AssetFormData>
   monitoringZones?: MonitoringZoneRef[]
+  monitoringTemplates: MonitoringTemplateOption[]
   assetMonitoring?: AssetMonitoringData
 }
 
@@ -60,7 +62,7 @@ const monitoringStatusLabels: Record<string, { label: string; color: string }> =
   DISABLED: { label: 'Deshabilitado', color: 'bg-gray-100 text-gray-800' },
 }
 
-export function AssetForm({ mode, assetId, assetTypes, brands, locations, tenants, defaultTenantId, currentRole, initialData, monitoringZones = [], assetMonitoring }: AssetFormProps) {
+export function AssetForm({ mode, assetId, assetTypes, brands, locations, tenants, defaultTenantId, currentRole, initialData, monitoringZones = [], monitoringTemplates, assetMonitoring }: AssetFormProps) {
   const router = useRouter()
   const [loading, setLoading] = useState(false)
   const [form, setForm] = useState<AssetFormData>({
@@ -100,6 +102,8 @@ export function AssetForm({ mode, assetId, assetTypes, brands, locations, tenant
   const [monHostname, setMonHostname] = useState(assetMonitoring?.monitoringHostname ?? initialData?.hostname ?? '')
 
   const selectedType = assetTypes.find(t => t.id === form.assetTypeId)
+  const selectedMonTemplate = monitoringTemplates.find(t => t.zabbixTemplateName === monTemplate)
+  const showSnmpField = !selectedMonTemplate || selectedMonTemplate.protocol === 'SNMP'
   const isMonitorable = selectedType?.isMonitorable ?? false
   const shownFields: string[] = (selectedType?.fieldConfig as any)?.show ?? []
   const availableModels = brands.find(b => b.id === form.brandId)?.models ?? []
@@ -370,13 +374,28 @@ export function AssetForm({ mode, assetId, assetTypes, brands, locations, tenant
 
                     <div className="grid grid-cols-2 gap-4">
                       <div className="space-y-2">
-                        <Label>Template override</Label>
-                        <Input value={monTemplate} onChange={e => setMonTemplate(e.target.value)} placeholder="Dejar vacío para usar el default del tipo" />
+                        <Label>Template de monitoreo</Label>
+                        <select
+                          className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
+                          value={monTemplate}
+                          onChange={e => setMonTemplate(e.target.value)}
+                        >
+                          <option value="">— Usar default del tipo de activo —</option>
+                          {monitoringTemplates.map(t => (
+                            <option key={t.id} value={t.zabbixTemplateName}>
+                              {t.assetTypeName} ({t.protocol}) {t.description ? `— ${t.description}` : ''}
+                            </option>
+                          ))}
+                        </select>
+                        <p className="text-xs text-muted-foreground">Seleccioná un template específico o dejá el default que se asigna por tipo de activo.</p>
                       </div>
-                      <div className="space-y-2">
-                        <Label>SNMP Community</Label>
-                        <Input value={monSnmp} onChange={e => setMonSnmp(e.target.value)} placeholder="public (solo si aplica)" />
-                      </div>
+                      {showSnmpField && (
+                        <div className="space-y-2">
+                          <Label>SNMP Community</Label>
+                          <Input value={monSnmp} onChange={e => setMonSnmp(e.target.value)} placeholder="public (solo si aplica)" />
+                          <p className="text-xs text-muted-foreground">Este campo aplica cuando el template usa protocolo SNMP.</p>
+                        </div>
+                      )}
                     </div>
                   </div>
                 )}

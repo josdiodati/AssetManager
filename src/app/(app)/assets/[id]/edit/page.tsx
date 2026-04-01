@@ -8,6 +8,7 @@ import { auth } from '@/lib/auth'
 import { redirect, notFound } from 'next/navigation'
 import { AssetForm } from '../../asset-form'
 import { format } from 'date-fns'
+import { prisma } from '@/lib/prisma'
 
 export default async function EditAssetPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params
@@ -18,13 +19,24 @@ export default async function EditAssetPage({ params }: { params: Promise<{ id: 
     const asset = await getAsset(id)
     const tenantId = asset.tenantId
 
-    const [assetTypes, brands, locations, tenants, monitoringZones, assetMonitoring] = await Promise.all([
+    const [assetTypes, brands, locations, tenants, monitoringZones, assetMonitoring, monitoringTemplates] = await Promise.all([
       getAssetTypes(tenantId),
       getBrandsWithModels(),
       getLocations(tenantId),
       session?.user.role === 'SUPER_ADMIN' ? getTenants() : Promise.resolve([]),
       getMonitoringZones(tenantId),
       getAssetMonitoring(id),
+      prisma.monitoringTemplate.findMany({
+        where: { active: true },
+        orderBy: { assetTypeName: 'asc' },
+        select: {
+          id: true,
+          assetTypeName: true,
+          zabbixTemplateName: true,
+          protocol: true,
+          description: true,
+        },
+      }),
     ])
 
     const initialData = {
@@ -66,6 +78,7 @@ export default async function EditAssetPage({ params }: { params: Promise<{ id: 
         currentRole={session?.user.role ?? ''}
         initialData={initialData}
         monitoringZones={monitoringZones}
+        monitoringTemplates={monitoringTemplates}
         assetMonitoring={assetMonitoring}
       />
     )

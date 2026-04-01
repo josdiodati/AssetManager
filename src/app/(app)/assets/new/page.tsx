@@ -6,18 +6,30 @@ import { getLocations } from '@/lib/actions/locations'
 import { getTenants } from '@/lib/actions/tenants'
 import { getMonitoringZones } from '@/lib/actions/monitoring'
 import { AssetForm } from '../asset-form'
+import { prisma } from '@/lib/prisma'
 
 export default async function NewAssetPage() {
   const session = await auth()
   if (session?.user.role === 'CLIENT_ADMIN') redirect('/assets')
 
   const tenantId = session?.user.activeTenantId ?? ''
-  const [assetTypes, brands, locations, tenants, monitoringZones] = await Promise.all([
+  const [assetTypes, brands, locations, tenants, monitoringZones, monitoringTemplates] = await Promise.all([
     getAssetTypes(tenantId),
     getBrandsWithModels(),
     tenantId ? getLocations(tenantId) : Promise.resolve([]),
     session?.user.role === 'SUPER_ADMIN' ? getTenants() : Promise.resolve([]),
     tenantId ? getMonitoringZones(tenantId) : Promise.resolve([]),
+    prisma.monitoringTemplate.findMany({
+      where: { active: true },
+      orderBy: { assetTypeName: 'asc' },
+      select: {
+        id: true,
+        assetTypeName: true,
+        zabbixTemplateName: true,
+        protocol: true,
+        description: true,
+      },
+    }),
   ])
 
   return (
@@ -30,6 +42,7 @@ export default async function NewAssetPage() {
       defaultTenantId={tenantId}
       currentRole={session?.user.role ?? ''}
       monitoringZones={monitoringZones}
+      monitoringTemplates={monitoringTemplates}
     />
   )
 }
