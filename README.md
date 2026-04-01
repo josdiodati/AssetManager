@@ -548,7 +548,344 @@ The acceptance flow requires the `/accept/*` route to be publicly accessible wit
 
 This means the full app is never exposed to the internet — only the public acceptance endpoint is reachable externally.
 
+
+
 ---
+
+## Centralized Monitoring Platform
+
+### Overview
+
+Asset Manager integrates with **Zabbix** and **Grafana** to provide centralized multi-client IT infrastructure monitoring. The goal is to give a single pane of glass for monitoring all client environments from one platform.
+
+Each client site gets a **Monitoring Probe** (Raspberry Pi or VM) deployed on-premises. The probe runs a Zabbix Proxy that collects metrics from local network devices and forwards them through a WireGuard VPN tunnel to the central Zabbix Server.
+
+This architecture allows monitoring devices that are behind NATs, firewalls, and private networks — without requiring any inbound ports on the client side.
+
+### Why Monitoreadores (Monitoring Probes)?
+
+Traditional monitoring requires either:
+- Direct network access to every device (not possible across client sites)
+- Agents installed on every device (not possible on network equipment)
+
+The **Monitoreador** (monitoring probe) solves this by placing a small device inside each client's network that:
+
+1. **Discovers and polls** local devices via SNMP, ICMP ping, and Zabbix Agent
+2. **Tunnels everything** back to the central server through an encrypted WireGuard VPN
+3. **Works behind any firewall** — only needs outbound UDP on port 51820
+4. **Monitors itself** — CPU, RAM, disk, uptime of the probe are also tracked
+5. **Scales per-site** — each location gets its own probe with its own proxy
+
+### Architecture
+
+```
+CENTRAL SERVER (AWS — 18.117.185.199)
+├── Asset Manager (port 3000)
+│   ├── Health semaphore table (real-time Zabbix status)
+│   ├── Monitoring detail view (raw Zabbix data per asset)
+│   ├── Grafana dashboards (embedded via iframe proxy)
+│   └── Auto-creates Zabbix hosts when assets are saved
+├── Zabbix Server (port 10051 via WireGuard network)
+│   └── Receives metrics from all client proxies
+├── Grafana (port 3001, proxied at /grafana/)
+│   └── Zabbix datasource + "Monitoreo General" dashboard
+└── WireGuard (port 51820/udp)
+    └── VPN hub, subnet 10.13.13.0/24
+
+CLIENT SITE (Raspberry Pi or VM — "Monitoreador")
+├── WireGuard Client (10.13.13.X)
+│   └── Encrypted tunnel to central server
+├── Zabbix Proxy (SQLite, active mode)
+│   └── Polls local devices, forwards to central via WireGuard
+├── Zabbix Agent2 (active mode)
+│   └── Monitors the probe itself, reports to LOCAL proxy
+└── Client LAN devices
+    ├── Routers (SNMP)
+    ├── Switches (SNMP)
+    ├── Access Points (SNMP)
+    └── Servers (Zabbix Agent)
+```
+
+**Key networking detail:** All three containers (WireGuard, Proxy, Agent) share the same network stack via `network_mode: service:wireguard`. The Proxy reaches the central server through the WireGuard tunnel. The Agent reaches the Proxy at `127.0.0.1`.
+
+### What Gets Monitored
+
+| Category | Method | Examples |
+|---|---|---|
+| **Servers / VMs** | Zabbix Agent (active) | CPU, RAM, disk, processes, services, uptime, logs |
+| **Network Equipment** | SNMP v2c/v3 | Interface status, traffic, errors, CPU/mem, temperature |
+| **UniFi Switches** | SNMP (AirOS template) | Port status, traffic per interface, ICMP, uptime |
+| **UniFi Gateways** | SNMP (AirOS template) | WAN status, traffic, interfaces, ICMP, system info |
+| **UniFi APs** | SNMP (AirOS template) | Radio status, memory, load, interfaces, ICMP |
+| **Any IP device** | ICMP Ping | Reachability, latency, packet loss |
+| **The probe itself** | Zabbix Agent | CPU, RAM, disk, uptime (self-monitoring) |
+
+### Health Semaphore
+
+The monitoring overview in Asset Manager shows a real-time health status for each monitored asset, derived from live Zabbix data:
+
+| Status | Meaning | Condition |
+|---|---|---|
+| 🟢 **Healthy** | Device reachable, no significant problems | Available AND no problems or severity ≤ Information |
+| 🟡 **Warning** | Device reachable, minor issues detected | Available AND max severity = Warning or Average |
+| 🔴 **Critical** | Device unreachable or major problems | Unavailable OR max severity ≥ High |
+| ⚪ **Unknown** | No data yet or device just added | All availability signals unknown |
+| ⚫ **Disabled** | Monitoring intentionally turned off | Host disabled in Zabbix |
+
+The health status considers both passive interface availability (`interfaces[].available`) and active agent availability (`host.active_available`) to correctly handle active-mode agents that don't use passive checks.
+
+### Monitoring Templates
+
+Templates define what Zabbix template to assign and what monitoring protocol to use. They are selectable via a dropdown in the asset form:
+
+| Template | Protocol | Zabbix Template | Applies To |
+|---|---|---|---|
+| Linux Server | Agent (active) | Linux by Zabbix agent active | Linux servers, VMs |
+| Windows Server | Agent (active) | Windows by Zabbix agent active | Windows servers |
+| Network Switch | SNMP | Interfaces Simple by SNMP | Generic managed switches |
+| Router | SNMP | Interfaces Simple by SNMP | Generic routers |
+| Monitoreador | Agent (active) | Linux by Zabbix agent active | Raspberry Pi / VM probes |
+| UniFi Switch (USW) | SNMP | Ubiquiti AirOS by SNMP | USW-Lite, USW-Pro, USW-Enterprise |
+| UniFi Gateway (UDM/USG) | SNMP | Ubiquiti AirOS by SNMP | UDM, UDM-Pro, USG, USG-Pro |
+| UniFi Access Point (UAP) | SNMP | Ubiquiti AirOS by SNMP | UAP, U6, U7 series |
+
+### Grafana Dashboards
+
+Grafana is embedded directly into Asset Manager at `/admin/monitoring/dashboards`. The "Monitoreo General" dashboard includes:
+
+- **ICMP Ping Status** — table showing all hosts up/down
+- **CPU Usage per host** — time series
+- **Available Memory per host** — time series with red/yellow/green thresholds
+- **ICMP Response Time / Latency** — time series
+- **ICMP Packet Loss** — time series with thresholds
+- **Network Traffic In/Out** — time series (bps)
+- **Active Problems** — Zabbix triggers panel with severity
+- **System Uptime** — table
+- **SNMP / Agent Availability** — stat panels with value mappings
+- **Interface Operational Status** — table
+
+Grafana is configured with anonymous access (Viewer role) and `allow_embedding = true`. It serves from the sub-path `/grafana/` and is proxied through Next.js rewrites.
+
+---
+
+## Deploying a New Monitoring Probe
+
+This section describes how to deploy a monitoring probe at a new client site from scratch.
+
+### Prerequisites
+
+- A **Raspberry Pi** (4 or 5, any RAM) or a **VM** (Ubuntu 22.04/24.04, minimum 1 vCPU / 1GB RAM)
+- **Docker** and **Docker Compose** installed on the probe
+- **SSH access** to the probe
+- **Outbound UDP port 51820** allowed from the probe to the internet (for WireGuard)
+- **LAN access** from the probe to the devices it will monitor (SNMP 161, ICMP, Agent 10050)
+
+### Step 1: Generate WireGuard Peer on Central Server
+
+```bash
+ssh ubuntu@18.117.185.199
+
+# Check current peers and note the next available IP
+docker exec wireguard wg show wg0
+
+# Generate keys for the new peer
+wg genkey | tee /tmp/peer_privkey | wg pubkey > /tmp/peer_pubkey
+cat /tmp/peer_pubkey  # You'll need this for the server config
+
+# Edit WireGuard config
+sudo nano /opt/monitoring-data/wireguard/wg_confs/wg0.conf
+
+# Add at the end:
+# [Peer]
+# PublicKey = <contents of /tmp/peer_pubkey>
+# AllowedIPs = 10.13.13.X/32   (next available IP)
+
+# Restart WireGuard to apply
+docker restart wireguard
+
+# Get the server's public key (needed for probe config)
+docker exec wireguard wg show wg0 | grep "public key"
+```
+
+### Step 2: Create the Zabbix Proxy
+
+Via Zabbix Web UI (http://localhost:8080) or API:
+
+1. Go to **Administration → Proxies → Create proxy**
+2. Set:
+   - **Proxy name:** `proxy-CLIENTNAME-lan1` (this MUST match the probe's `PROXY_NAME` exactly)
+   - **Proxy mode:** Active
+   - **Encryption:** None (WireGuard handles encryption at the transport layer)
+3. Save
+
+### Step 3: Prepare the Probe
+
+SSH into the probe and create the deployment directory:
+
+```bash
+mkdir -p ~/monitoring-probe/wireguard
+cd ~/monitoring-probe
+```
+
+Create `docker-compose.yml`:
+
+```yaml
+services:
+  wireguard:
+    image: lscr.io/linuxserver/wireguard:latest
+    container_name: ${PROBE_PREFIX:-probe}-wireguard
+    cap_add:
+      - NET_ADMIN
+      - SYS_MODULE
+    environment:
+      PUID: 1000
+      PGID: 1000
+      TZ: ${TZ:-America/Argentina/Buenos_Aires}
+    volumes:
+      - ./wireguard:/config
+      - /lib/modules:/lib/modules:ro
+    sysctls:
+      - net.ipv4.conf.all.src_valid_mark=1
+    restart: unless-stopped
+
+  zabbix-proxy:
+    image: zabbix/zabbix-proxy-sqlite3:7.2-ubuntu-latest
+    container_name: ${PROBE_PREFIX:-probe}-zabbix-proxy
+    environment:
+      ZBX_HOSTNAME: ${PROXY_NAME}
+      ZBX_SERVER_HOST: ${ZABBIX_SERVER_WG_IP:-10.13.13.1}
+      ZBX_SERVER_PORT: 10051
+      ZBX_PROXYMODE: 0
+      ZBX_ENABLEREMOTECOMMANDS: 1
+      ZBX_LOGREMOTECOMMANDS: 1
+      ZBX_DEBUGLEVEL: 3
+      ZBX_TIMEOUT: 10
+      ZBX_STARTPOLLERS: 20
+      ZBX_STARTPINGERS: 5
+      ZBX_STARTDISCOVERERS: 3
+      ZBX_STARTHTTPPOLLERS: 2
+    volumes:
+      - ./zabbix-proxy:/var/lib/zabbix
+    network_mode: service:wireguard
+    depends_on:
+      - wireguard
+    restart: unless-stopped
+
+  zabbix-agent:
+    image: zabbix/zabbix-agent2:7.2-ubuntu-latest
+    container_name: ${PROBE_PREFIX:-probe}-zabbix-agent
+    environment:
+      # ⚠️ CRITICAL: Agent MUST point to the LOCAL proxy (127.0.0.1)
+      # NOT the central server (10.13.13.1)!
+      # If this is wrong, the agent will report "host not found"
+      ZBX_HOSTNAME: ${PROXY_NAME}
+      ZBX_SERVER_HOST: 127.0.0.1
+      ZBX_SERVER_PORT: 10051
+      ZBX_PASSIVE_ALLOW: "false"
+    network_mode: service:wireguard
+    depends_on:
+      - wireguard
+    restart: unless-stopped
+```
+
+Create `.env`:
+
+```bash
+PROXY_NAME=proxy-CLIENTNAME-lan1
+PROBE_PREFIX=CLIENTNAME
+TZ=America/Argentina/Buenos_Aires
+ZABBIX_SERVER_WG_IP=10.13.13.1
+```
+
+### Step 4: Configure WireGuard on the Probe
+
+Create `wireguard/wg0.conf`:
+
+```ini
+[Interface]
+PrivateKey = <PROBE_PRIVATE_KEY_FROM_STEP_1>
+Address = 10.13.13.X/32
+
+[Peer]
+PublicKey = <CENTRAL_SERVER_PUBLIC_KEY>
+Endpoint = 18.117.185.199:51820
+AllowedIPs = 10.13.13.0/24
+PersistentKeepalive = 25
+```
+
+### Step 5: Start the Probe
+
+```bash
+cd ~/monitoring-probe
+docker compose up -d
+```
+
+### Step 6: Verify
+
+From the **central server**:
+```bash
+# Check WireGuard handshake
+docker exec wireguard wg show wg0
+# Look for: latest handshake: X seconds ago
+
+# Ping the probe
+docker exec wireguard ping -c 1 10.13.13.X
+```
+
+From the **probe**:
+```bash
+# Check proxy is receiving config from server
+docker logs CLIENTNAME-zabbix-proxy --tail 10
+# Should see: "received configuration data from server"
+
+# Check agent is reporting to local proxy
+docker logs CLIENTNAME-zabbix-agent --tail 10
+# Should see: "active check configuration update ... is working"
+# Should NOT see: "host [proxy-...] not found"
+```
+
+### Step 7: Register in Asset Manager
+
+1. **Create a Monitoring Zone** at `/admin/monitoring/zones`:
+   - Name: client site name
+   - Proxy name: `proxy-CLIENTNAME-lan1` (must match exactly)
+   - Link to a Location if desired
+
+2. **Create monitored assets** at `/assets/new`:
+   - Fill in asset details (type, brand, model, IP)
+   - In the **Monitoring tab**:
+     - Enable monitoring ✅
+     - Select the zone
+     - Select the template from the dropdown (e.g., "UniFi Switch (USW)")
+     - Set the monitoring IP (must be reachable from the probe's LAN)
+     - Set SNMP community if applicable
+   - **Save** → Asset Manager automatically creates the host in Zabbix with the correct template, proxy, interface type, and SNMP community
+
+3. **Verify** at `/admin/monitoring`:
+   - The asset should appear in the table
+   - Health status updates within 1-2 minutes
+   - Click on the asset to see the full monitoring detail
+
+### Troubleshooting
+
+| Problem | Cause | Fix |
+|---|---|---|
+| Agent logs: `host [proxy-xxx] not found` | Agent `ZBX_SERVER_HOST` points to central server instead of local proxy | Set `ZBX_SERVER_HOST=127.0.0.1` in the agent environment |
+| Agent logs: `cannot connect to 10.13.13.1:10051` | WireGuard tunnel not established or Zabbix Server not reachable via WireGuard | Verify WireGuard handshake, check that `zabbix-server` uses `network_mode: service:wireguard` on the central server |
+| No WireGuard handshake | Firewall blocking outbound UDP 51820 | Open outbound UDP 51820 on client's firewall/router |
+| SNMP items show "Not supported" | Wrong community string, or device doesn't expose those OIDs | Verify SNMP is enabled on the device, check community string matches |
+| Health shows "Unknown" in AM | For active agents: code must read `host.active_available`, not just `interfaces[].available` | Ensure running latest code version |
+| Zabbix host creation fails with "proxyid" error | Zabbix 7.2 requires `monitored_by: 1` when assigning a proxy | Ensure running latest code version |
+| SNMP device unreachable from probe | Probe is in a different VLAN with no routing | Ensure the probe's default gateway routes to the target VLAN, or add a static route |
+
+### Network & Security Considerations
+
+- **No inbound ports** required on the client side — the probe only needs outbound UDP 51820
+- **WireGuard** encrypts all traffic between probe and central server
+- **SNMP v2c** is used for network equipment — community string is configured per client
+- **Zabbix Agent (active mode)** — the agent initiates all connections, no listening ports needed
+- **VLAN routing** — the probe must have network-level access (routing) to the VLANs where monitored devices live. If devices are in different VLANs, the probe's default gateway must be able to route to them
+- **Before testing connectivity** to unknown IPs from the probe, always verify routing with `ip route` first. Rapid network commands to unreachable IPs can trigger ARP flood protection on some hypervisors/switches and lock the NIC
 
 ## Roadmap (Phase 3+)
 
@@ -560,3 +897,4 @@ This means the full app is never exposed to the internet — only the public acc
 - [ ] Warranty / EOL alert emails (automated)
 - [ ] Reports & Excel export (per-tenant)
 - [ ] Bulk import improvements (validation report, preview)
+
