@@ -222,10 +222,15 @@ export async function syncAssetToZabbix(assetId: string): Promise<SyncResult> {
       })
     }
 
-    // 2. Find the Zabbix template for this asset type
-    const monTemplate = await prisma.monitoringTemplate.findUnique({
-      where: { assetTypeName: assetMon.asset.assetType.name },
-    })
+    // 2. Find the monitoring template config
+    // First try by override (zabbixTemplateName), then by asset type name
+    let monTemplate = assetMon.templateOverride
+      ? await prisma.monitoringTemplate.findFirst({
+          where: { zabbixTemplateName: assetMon.templateOverride, active: true },
+        })
+      : await prisma.monitoringTemplate.findFirst({
+          where: { assetTypeName: assetMon.asset.assetType.name, active: true },
+        })
 
     // Use override template if specified, otherwise use the mapping
     const templateName = assetMon.templateOverride || monTemplate?.zabbixTemplateName
@@ -281,7 +286,7 @@ export async function syncAssetToZabbix(assetId: string): Promise<SyncResult> {
         groupId,
         templateIds,
         proxyId,
-        ipAddress: asset.ipAddress || undefined,
+        ipAddress: assetMon.monitoringIpAddress || asset.ipAddress || undefined,
         port: monTemplate?.defaultPort || undefined,
         interfaceType: ifaceType as 1 | 2 | 3 | 4,
         snmpCommunity: assetMon.snmpCommunity || monTemplate?.snmpCommunity || undefined,
