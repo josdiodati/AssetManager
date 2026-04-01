@@ -161,6 +161,7 @@ export async function getHost(config: ZabbixConfig, hostId: string) {
 // ─── Sync single asset ──────────────────────────────────────────────────────
 
 import { prisma } from '@/lib/prisma'
+import { getSeverityName } from '@/lib/monitoring-utils'
 
 interface SyncResult {
   success: boolean
@@ -406,26 +407,6 @@ const SEVERITY_NAMES = [
   'Disaster',
 ] as const
 
-export function getSeverityName(severity: number): string {
-  return SEVERITY_NAMES[severity] ?? 'Unknown'
-}
-
-export function getHealthColor(health: HealthStatus): string {
-  switch (health) {
-    case 'HEALTHY':
-      return 'text-green-600'
-    case 'WARNING':
-      return 'text-yellow-600'
-    case 'CRITICAL':
-      return 'text-red-600'
-    case 'UNKNOWN':
-      return 'text-gray-400'
-    case 'DISABLED':
-      return 'text-gray-600'
-    default:
-      return 'text-gray-400'
-  }
-}
 
 export async function getHostAvailability(config: ZabbixConfig, hostId: string): Promise<HostAvailability> {
   const hosts = await rpc<Array<{
