@@ -18,6 +18,8 @@ interface MonitoringRow {
     ipAddress: string | null
     tenant: { name: string } | null
     assetType: { name: string } | null
+    brand: { name: string } | null
+    model: { name: string } | null
   }
   zone: { name: string } | null
   health: HostHealth | null
@@ -98,6 +100,7 @@ export function MonitoringTable({ monitoredAssets }: { monitoredAssets: Monitori
         <thead>
           <tr className='border-b'>
             <th className='text-left py-2 font-medium'>Activo</th>
+            <th className='text-left py-2 font-medium'>System Name</th>
             <th className='text-left py-2 font-medium'>Cliente</th>
             <th className='text-left py-2 font-medium'>IP</th>
             <th className='text-left py-2 font-medium'>Tipo</th>
@@ -121,8 +124,9 @@ export function MonitoringTable({ monitoredAssets }: { monitoredAssets: Monitori
               >
                 <td className='py-2'>
                   <div className='font-medium'>{m.asset.assetTag}</div>
-                  <div className='text-xs text-muted-foreground'>{m.asset.description || m.asset.hostname || '—'}</div>
+                  <div className='text-xs text-muted-foreground'>{[m.asset.brand?.name, m.asset.model?.name].filter(Boolean).join(' ') || '—'}</div>
                 </td>
+                <td className='py-2 text-muted-foreground'>{m.health?.systemName || '—'}</td>
                 <td className='py-2'>{m.asset.tenant?.name || '—'}</td>
                 <td className='py-2'>{ip}</td>
                 <td className='py-2'>{m.asset.assetType?.name || '—'}</td>

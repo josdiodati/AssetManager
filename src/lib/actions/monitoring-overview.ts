@@ -19,6 +19,8 @@ const monitoredAssetInclude = {
       tenantId: true,
       tenant: { select: { id: true, name: true } },
       assetType: { select: { id: true, name: true } },
+      brand: { select: { name: true } },
+      model: { select: { name: true } },
     },
   },
   zone: {

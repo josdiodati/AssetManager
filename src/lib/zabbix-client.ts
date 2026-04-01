@@ -400,6 +400,7 @@ export interface HostHealth {
   maxSeverity: number
   maxSeverityName: string
   lastAccess?: string
+  systemName?: string
   availableStatus: number
   interfaces: Array<{ type: number; ip: string; port: string; available: number }>
 }
@@ -529,6 +530,23 @@ export async function getHostsHealthBatch(config: ZabbixConfig, hostIds: string[
     console.error('[Health] Failed to fetch item lastclock:', e)
   }
 
+  // Extract system.name per host
+  const systemNameByHost = new Map<string, string>()
+  try {
+    const sysNameItems = await rpc<Array<{ hostid: string; lastvalue: string }>>(config, 'item.get', {
+      hostids: hostIds,
+      output: ['itemid', 'hostid', 'lastvalue', 'lastclock'],
+      filter: { status: 0, key_: 'system.name' },
+    })
+    for (const item of sysNameItems) {
+      if (item.lastvalue && Number(item.lastvalue) !== 0) {
+        systemNameByHost.set(item.hostid, item.lastvalue)
+      }
+    }
+  } catch (e) {
+    // ignore
+  }
+
   const problemsByHost = new Map<string, ZabbixHostProblem[]>()
   for (const result of problemResults) {
     problemsByHost.set(result.hostId, result.problems)
@@ -589,6 +607,7 @@ export async function getHostsHealthBatch(config: ZabbixConfig, hostIds: string[
       maxSeverity,
       maxSeverityName: getSeverityName(maxSeverity),
       lastAccess: itemsByHost.get(host.hostid)?.toString() ?? undefined,
+      systemName: systemNameByHost.get(host.hostid) ?? undefined,
       availableStatus,
       interfaces,
     }
