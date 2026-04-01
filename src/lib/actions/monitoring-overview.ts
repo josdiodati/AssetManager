@@ -52,19 +52,17 @@ export async function getMonitoringOverview() {
     throw new Error('Unauthorized')
   }
 
-  const scopedTenantId = tenantId as string | undefined
-
   const monitoredAssetsWhere: Prisma.AssetMonitoringWhereInput = role === 'SUPER_ADMIN'
     ? { monitoringEnabled: true }
-    : { monitoringEnabled: true, asset: { tenantId: scopedTenantId! } }
+    : { monitoringEnabled: true, asset: { tenantId: tenantId! } }
 
   const probesWhere: Prisma.MonitoringZoneWhereInput = role === 'SUPER_ADMIN'
     ? { active: true }
-    : { active: true, integration: { tenantId: scopedTenantId! } }
+    : { active: true, integration: { tenantId: tenantId! } }
 
   const integrationsWhere: Prisma.MonitoringIntegrationWhereInput = role === 'SUPER_ADMIN'
     ? { enabled: true }
-    : { tenantId: scopedTenantId!, enabled: true }
+    : { tenantId: tenantId!, enabled: true }
 
   const [monitoredAssets, probes, integrations, templates] = await Promise.all([
     prisma.assetMonitoring.findMany({
