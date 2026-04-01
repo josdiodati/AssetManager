@@ -111,6 +111,7 @@ export async function createHost(config: ZabbixConfig, params: CreateHostParams)
   }
 
   if (params.proxyId) {
+    hostData.monitored_by = 1
     hostData.proxyid = params.proxyId
   }
 
