@@ -503,6 +503,26 @@ export async function getHostsHealthBatch(config: ZabbixConfig, hostIds: string[
     ),
   ])
 
+  // Fetch latest item timestamps per host for "last data" column
+  const itemsByHost = new Map<string, number>()
+  try {
+    const items = await rpc<Array<{ hostid: string; lastclock: string }>>(config, 'item.get', {
+      hostids: hostIds,
+      output: ['itemid', 'hostid', 'lastclock'],
+      filter: { status: 0 },
+      limit: 5000,
+    })
+    for (const item of items) {
+      const clock = Number(item.lastclock)
+      if (clock > 0) {
+        const current = itemsByHost.get(item.hostid) ?? 0
+        if (clock > current) itemsByHost.set(item.hostid, clock)
+      }
+    }
+  } catch (e) {
+    console.error('[Health] Failed to fetch item lastclock:', e)
+  }
+
   const problemsByHost = new Map<string, ZabbixHostProblem[]>()
   for (const result of problemResults) {
     problemsByHost.set(result.hostId, result.problems)
@@ -562,6 +582,7 @@ export async function getHostsHealthBatch(config: ZabbixConfig, hostIds: string[
       problemCount: hostProblems.length,
       maxSeverity,
       maxSeverityName: getSeverityName(maxSeverity),
+      lastAccess: itemsByHost.get(host.hostid)?.toString() ?? undefined,
       availableStatus,
       interfaces,
     }

@@ -57,7 +57,9 @@ function severityClass(severity?: string | null) {
 function formatRelativeTime(value?: string | null) {
   if (!value) return '—'
 
-  const date = new Date(value)
+  // Support both ISO date strings and unix timestamps (seconds)
+  const numVal = Number(value)
+  const date = !Number.isNaN(numVal) && numVal > 1000000000 ? new Date(numVal * 1000) : new Date(value)
   if (Number.isNaN(date.getTime())) return '—'
 
   const diffMs = date.getTime() - Date.now()
