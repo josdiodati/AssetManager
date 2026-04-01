@@ -616,6 +616,8 @@ model MonitoringTemplate {
   protocol           MonitoringProtocol @default(AGENT)
   defaultPort        Int?
   snmpCommunity      String?
+  description        String?
+  tier               Int                @default(1)
   active             Boolean            @default(true)
   createdAt          DateTime           @default(now())
   updatedAt          DateTime           @updatedAt

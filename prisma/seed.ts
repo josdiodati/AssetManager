@@ -125,6 +125,93 @@ async function main() {
   }
   console.log('✓ Asset types seeded')
 
+  // ── Monitoring Templates ───────────────────────────────────────────────
+  const monitoringTemplates = [
+    {
+      assetTypeName: 'Linux Server',
+      zabbixTemplateName: 'Linux by Zabbix agent active',
+      protocol: 'AGENT' as const,
+      defaultPort: 10050,
+      snmpCommunity: null,
+      description: 'Servers and VMs running Linux (Ubuntu, Debian, RHEL, etc.)',
+      tier: 1,
+    },
+    {
+      assetTypeName: 'Windows Server',
+      zabbixTemplateName: 'Windows by Zabbix agent active',
+      protocol: 'AGENT' as const,
+      defaultPort: 10050,
+      snmpCommunity: null,
+      description: 'Servers and VMs running Windows Server',
+      tier: 1,
+    },
+    {
+      assetTypeName: 'Network Switch',
+      zabbixTemplateName: 'Interfaces Simple by SNMP',
+      protocol: 'SNMP' as const,
+      defaultPort: 161,
+      snmpCommunity: '{$SNMP_COMMUNITY}',
+      description: 'Generic managed switches (non-UniFi)',
+      tier: 1,
+    },
+    {
+      assetTypeName: 'Router',
+      zabbixTemplateName: 'Interfaces Simple by SNMP',
+      protocol: 'SNMP' as const,
+      defaultPort: 161,
+      snmpCommunity: '{$SNMP_COMMUNITY}',
+      description: 'Generic routers (non-UniFi)',
+      tier: 1,
+    },
+    {
+      assetTypeName: 'Monitoreador',
+      zabbixTemplateName: 'Linux by Zabbix agent active',
+      protocol: 'AGENT' as const,
+      defaultPort: 10050,
+      snmpCommunity: null,
+      description: 'Raspberry Pi or VM monitoring probes',
+      tier: 1,
+    },
+    {
+      assetTypeName: 'UniFi Switch (USW)',
+      zabbixTemplateName: 'Ubiquiti AirOS by SNMP',
+      protocol: 'SNMP' as const,
+      defaultPort: 161,
+      snmpCommunity: '{$SNMP_COMMUNITY}',
+      description: 'UniFi switches: USW-Lite, USW-Pro, USW-Enterprise',
+      tier: 1,
+    },
+    {
+      assetTypeName: 'UniFi Gateway (UDM/USG)',
+      zabbixTemplateName: 'Ubiquiti AirOS by SNMP',
+      protocol: 'SNMP' as const,
+      defaultPort: 161,
+      snmpCommunity: '{$SNMP_COMMUNITY}',
+      description: 'UniFi gateways: UDM, UDM-Pro, USG, USG-Pro',
+      tier: 1,
+    },
+    {
+      assetTypeName: 'UniFi Access Point (UAP)',
+      zabbixTemplateName: 'Ubiquiti AirOS by SNMP',
+      protocol: 'SNMP' as const,
+      defaultPort: 161,
+      snmpCommunity: '{$SNMP_COMMUNITY}',
+      description: 'UniFi access points: UAP, U6, U7 series',
+      tier: 1,
+    },
+  ]
+
+  await prisma.monitoringTemplate.deleteMany()
+  await prisma.monitoringTemplate.createMany({
+    data: monitoringTemplates,
+  })
+
+  const monitoringTemplateCount = await prisma.monitoringTemplate.count()
+  if (monitoringTemplateCount !== monitoringTemplates.length) {
+    throw new Error(`Expected ${monitoringTemplates.length} monitoring templates, found ${monitoringTemplateCount}`)
+  }
+  console.log(`✓ Monitoring templates seeded (${monitoringTemplateCount})`)
+
   // ── Demo Location ────────────────────────────────────────────────────────
   const existingLoc = await prisma.location.findFirst({
     where: { tenantId: demoTenant.id, site: 'Oficina Central' }
