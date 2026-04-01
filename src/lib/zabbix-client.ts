@@ -491,7 +491,7 @@ export async function getHostDetail(config: ZabbixConfig, hostId: string): Promi
 export async function getHostsHealthBatch(config: ZabbixConfig, hostIds: string[]): Promise<HostHealth[]> {
   if (hostIds.length === 0) return []
 
-  const [hosts, problems] = await Promise.all([
+  const [hosts, problems, items] = await Promise.all([
     rpc<Array<{
       hostid: string
       host: string
@@ -517,6 +517,20 @@ export async function getHostsHealthBatch(config: ZabbixConfig, hostIds: string[
       sortfield: ['severity'],
       sortorder: ['DESC'],
     }),
+    rpc<Array<{
+      hostid: string
+      lastclock: string
+      status: string | number
+      state: string | number
+    }>>(config, 'item.get', {
+      hostids: hostIds,
+      output: ['hostid', 'lastclock', 'status', 'state'],
+      sortfield: ['lastclock'],
+      sortorder: ['DESC'],
+      monitored: true,
+      webitems: true,
+      limit: 5000,
+    }),
   ])
 
   const problemsByHost = new Map<string, ZabbixHostProblem[]>()
@@ -527,6 +541,14 @@ export async function getHostsHealthBatch(config: ZabbixConfig, hostIds: string[
       list.push(problem)
       problemsByHost.set(linkedHost.hostid, list)
     }
+  }
+
+  const lastAccessByHost = new Map<string, string>()
+  for (const item of items) {
+    if (Number(item.status) !== 0 || Number(item.state) !== 0) continue
+    const lastclock = Number(item.lastclock)
+    if (!lastclock || lastAccessByHost.has(item.hostid)) continue
+    lastAccessByHost.set(item.hostid, new Date(lastclock * 1000).toISOString())
   }
 
   return hosts.map((host) => {
@@ -576,6 +598,7 @@ export async function getHostsHealthBatch(config: ZabbixConfig, hostIds: string[
       problemCount: hostProblems.length,
       maxSeverity,
       maxSeverityName: getSeverityName(maxSeverity),
+      lastAccess: lastAccessByHost.get(host.hostid),
       availableStatus,
       interfaces,
     }
