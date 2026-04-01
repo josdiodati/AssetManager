@@ -478,6 +478,7 @@ export async function getHostsHealthBatch(config: ZabbixConfig, hostIds: string[
       host: string
       name: string
       status: string | number
+      active_available?: string | number
       interfaces?: Array<{
         interfaceid: string
         type: string | number
@@ -487,7 +488,7 @@ export async function getHostsHealthBatch(config: ZabbixConfig, hostIds: string[
       }>
     }>>(config, 'host.get', {
       hostids: hostIds,
-      output: ['hostid', 'host', 'name', 'status'],
+      output: ['hostid', 'host', 'name', 'status', 'active_available'],
       selectInterfaces: ['interfaceid', 'type', 'ip', 'port', 'available'],
     }),
     rpc<ZabbixHostProblem[]>(config, 'problem.get', {
@@ -519,13 +520,18 @@ export async function getHostsHealthBatch(config: ZabbixConfig, hostIds: string[
     }))
 
     const availableValues = interfaces.map((iface) => iface.available)
-    const availableStatus = interfaces.length === 0
-      ? 0
-      : availableValues.some((value) => value === 2)
-        ? 2
-        : availableValues.some((value) => value === 1)
-          ? 1
-          : 0
+    const activeAvailable = Number(host.active_available ?? 0)
+    // Combine passive interface availability with active agent availability
+    // active_available: 0=unknown, 1=available, 2=unavailable
+    const hasPassiveAvailable = availableValues.some((v) => v === 1)
+    const hasPassiveUnavailable = availableValues.some((v) => v === 2)
+    const hasActiveAvailable = activeAvailable === 1
+    const hasActiveUnavailable = activeAvailable === 2
+    const hasAnyAvailable = hasPassiveAvailable || hasActiveAvailable
+    const hasAnyUnavailable = hasPassiveUnavailable || hasActiveUnavailable
+    const allUnknown = !hasAnyAvailable && !hasAnyUnavailable
+
+    const availableStatus = hasAnyUnavailable ? 2 : hasAnyAvailable ? 1 : 0
 
     const hostProblems = problemsByHost.get(host.hostid) ?? []
     const severities = hostProblems.map((problem) => Number(problem.severity))
@@ -534,10 +540,12 @@ export async function getHostsHealthBatch(config: ZabbixConfig, hostIds: string[
     let health: HealthStatus
     if (Number(host.status) === 1) {
       health = 'DISABLED'
-    } else if (interfaces.length === 0 || interfaces.every((iface) => iface.available === 0)) {
+    } else if (allUnknown && interfaces.length === 0) {
       health = 'UNKNOWN'
-    } else if (interfaces.some((iface) => iface.available === 2)) {
+    } else if (hasAnyUnavailable) {
       health = 'CRITICAL'
+    } else if (allUnknown && !hasAnyAvailable) {
+      health = 'UNKNOWN'
     } else if (maxSeverity >= 4) {
       health = 'CRITICAL'
     } else if (maxSeverity >= 2) {
