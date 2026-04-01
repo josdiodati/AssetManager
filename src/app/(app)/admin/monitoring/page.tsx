@@ -17,7 +17,10 @@ export default async function MonitoringPage() {
           <h1 className='text-2xl font-bold'>Monitoreo</h1>
           <p className='mt-1 text-muted-foreground'>Estado operativo de todos los activos monitoreados y monitoreadores</p>
         </div>
-        <a href='/admin/config?tab=monitoring' className='inline-flex items-center rounded-md border px-4 py-2 text-sm font-medium hover:bg-accent'>Configuración YAML</a>
+        <div className='flex gap-2'>
+          <a href='/admin/monitoring/dashboards' className='inline-flex items-center rounded-md border px-4 py-2 text-sm font-medium hover:bg-accent'>📊 Dashboards</a>
+          <a href='/admin/config?tab=monitoring' className='inline-flex items-center rounded-md border px-4 py-2 text-sm font-medium hover:bg-accent'>Configuración YAML</a>
+        </div>
       </div>
 
       <div className='grid grid-cols-1 gap-4 md:grid-cols-5'>
