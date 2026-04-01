@@ -340,3 +340,244 @@ export async function unsyncAssetFromZabbix(assetId: string): Promise<SyncResult
     return { success: false, error: err.message }
   }
 }
+
+
+export type AvailabilityStatus = 0 | 1 | 2
+
+export interface HostAvailability {
+  available: AvailabilityStatus
+  snmpAvailable: AvailabilityStatus
+  ipmiAvailable: AvailabilityStatus
+  jmxAvailable: AvailabilityStatus
+}
+
+export interface ZabbixHostProblemTag {
+  tag: string
+  value: string
+}
+
+export interface ZabbixHostProblem {
+  eventid: string
+  objectid: string
+  name: string
+  severity: string
+  clock: string
+  acknowledged: string
+  r_eventid: string
+  tags?: ZabbixHostProblemTag[]
+  hosts?: Array<{ hostid: string }>
+}
+
+export interface ZabbixHostItem {
+  itemid: string
+  name: string
+  key_: string
+  lastvalue: string
+  lastclock: string
+  units: string
+  state: string
+  status: string
+  error: string
+  value_type: string
+}
+
+export type HealthStatus = 'HEALTHY' | 'WARNING' | 'CRITICAL' | 'UNKNOWN' | 'DISABLED'
+
+export interface HostHealth {
+  hostId: string
+  hostName: string
+  visibleName: string
+  ip: string
+  health: HealthStatus
+  problemCount: number
+  maxSeverity: number
+  maxSeverityName: string
+  lastAccess?: string
+  availableStatus: number
+  interfaces: Array<{ type: number; ip: string; port: string; available: number }>
+}
+
+const SEVERITY_NAMES = [
+  'Not classified',
+  'Information',
+  'Warning',
+  'Average',
+  'High',
+  'Disaster',
+] as const
+
+export function getSeverityName(severity: number): string {
+  return SEVERITY_NAMES[severity] ?? 'Unknown'
+}
+
+export function getHealthColor(health: HealthStatus): string {
+  switch (health) {
+    case 'HEALTHY':
+      return 'text-green-600'
+    case 'WARNING':
+      return 'text-yellow-600'
+    case 'CRITICAL':
+      return 'text-red-600'
+    case 'UNKNOWN':
+      return 'text-gray-400'
+    case 'DISABLED':
+      return 'text-gray-600'
+    default:
+      return 'text-gray-400'
+  }
+}
+
+export async function getHostAvailability(config: ZabbixConfig, hostId: string): Promise<HostAvailability> {
+  const hosts = await rpc<Array<{
+    interfaces?: Array<{ type: string | number; available: string | number }>
+  }>>(config, 'host.get', {
+    output: ['hostid', 'host', 'name', 'status'],
+    hostids: [hostId],
+    selectInterfaces: 'extend',
+  })
+
+  const interfaces = hosts[0]?.interfaces ?? []
+  const getAvailabilityForType = (type: number): AvailabilityStatus => {
+    const matching = interfaces.filter((iface) => Number(iface.type) === type)
+    if (matching.length === 0) return 0
+    if (matching.some((iface) => Number(iface.available) === 2)) return 2
+    if (matching.some((iface) => Number(iface.available) === 1)) return 1
+    return 0
+  }
+
+  return {
+    available: getAvailabilityForType(1),
+    snmpAvailable: getAvailabilityForType(2),
+    ipmiAvailable: getAvailabilityForType(3),
+    jmxAvailable: getAvailabilityForType(4),
+  }
+}
+
+export async function getHostProblems(config: ZabbixConfig, hostId: string): Promise<ZabbixHostProblem[]> {
+  return await rpc<ZabbixHostProblem[]>(config, 'problem.get', {
+    hostids: [hostId],
+    recent: true,
+    output: ['eventid', 'objectid', 'name', 'severity', 'clock', 'acknowledged', 'r_eventid'],
+    selectTags: 'extend',
+    sortfield: 'eventid',
+    sortorder: 'DESC',
+  })
+}
+
+export async function getHostItems(config: ZabbixConfig, hostId: string): Promise<ZabbixHostItem[]> {
+  return await rpc<ZabbixHostItem[]>(config, 'item.get', {
+    hostids: [hostId],
+    output: ['itemid', 'name', 'key_', 'lastvalue', 'lastclock', 'units', 'state', 'status', 'error', 'value_type'],
+    filter: { status: 0 },
+    sortfield: 'name',
+    limit: 500,
+  })
+}
+
+export async function getHostDetail(config: ZabbixConfig, hostId: string): Promise<any | null> {
+  const hosts = await rpc<any[]>(config, 'host.get', {
+    output: 'extend',
+    hostids: [hostId],
+    selectInterfaces: 'extend',
+    selectParentTemplates: ['templateid', 'name'],
+    selectGroups: ['groupid', 'name'],
+    selectInventory: 'extend',
+    selectTags: 'extend',
+  })
+
+  return hosts.length > 0 ? hosts[0] : null
+}
+
+export async function getHostsHealthBatch(config: ZabbixConfig, hostIds: string[]): Promise<HostHealth[]> {
+  if (hostIds.length === 0) return []
+
+  const [hosts, problems] = await Promise.all([
+    rpc<Array<{
+      hostid: string
+      host: string
+      name: string
+      status: string | number
+      interfaces?: Array<{
+        interfaceid: string
+        type: string | number
+        ip: string
+        port: string
+        available: string | number
+      }>
+    }>>(config, 'host.get', {
+      hostids: hostIds,
+      output: ['hostid', 'host', 'name', 'status'],
+      selectInterfaces: ['interfaceid', 'type', 'ip', 'port', 'available'],
+    }),
+    rpc<ZabbixHostProblem[]>(config, 'problem.get', {
+      hostids: hostIds,
+      recent: true,
+      output: ['eventid', 'objectid', 'name', 'severity'],
+      selectHosts: ['hostid'],
+      sortfield: ['severity'],
+      sortorder: ['DESC'],
+    }),
+  ])
+
+  const problemsByHost = new Map<string, ZabbixHostProblem[]>()
+  for (const problem of problems) {
+    const linkedHosts = problem.hosts ?? []
+    for (const linkedHost of linkedHosts) {
+      const list = problemsByHost.get(linkedHost.hostid) ?? []
+      list.push(problem)
+      problemsByHost.set(linkedHost.hostid, list)
+    }
+  }
+
+  return hosts.map((host) => {
+    const interfaces = (host.interfaces ?? []).map((iface) => ({
+      type: Number(iface.type),
+      ip: iface.ip,
+      port: iface.port,
+      available: Number(iface.available),
+    }))
+
+    const availableValues = interfaces.map((iface) => iface.available)
+    const availableStatus = interfaces.length === 0
+      ? 0
+      : availableValues.some((value) => value === 2)
+        ? 2
+        : availableValues.some((value) => value === 1)
+          ? 1
+          : 0
+
+    const hostProblems = problemsByHost.get(host.hostid) ?? []
+    const severities = hostProblems.map((problem) => Number(problem.severity))
+    const maxSeverity = severities.length > 0 ? Math.max(...severities) : 0
+
+    let health: HealthStatus
+    if (Number(host.status) === 1) {
+      health = 'DISABLED'
+    } else if (interfaces.length === 0 || interfaces.every((iface) => iface.available === 0)) {
+      health = 'UNKNOWN'
+    } else if (interfaces.some((iface) => iface.available === 2)) {
+      health = 'CRITICAL'
+    } else if (maxSeverity >= 4) {
+      health = 'CRITICAL'
+    } else if (maxSeverity >= 2) {
+      health = 'WARNING'
+    } else {
+      health = 'HEALTHY'
+    }
+
+    const primaryInterface = interfaces.find((iface) => iface.ip && iface.ip !== '0.0.0.0') ?? interfaces[0]
+
+    return {
+      hostId: host.hostid,
+      hostName: host.host,
+      visibleName: host.name,
+      ip: primaryInterface?.ip ?? '',
+      health,
+      problemCount: hostProblems.length,
+      maxSeverity,
+      maxSeverityName: getSeverityName(maxSeverity),
+      availableStatus,
+      interfaces,
+    }
+  })
+}

@@ -19,7 +19,7 @@ type Brand = { id: string; name: string; models: { id: string; name: string }[] 
 type Location = { id: string; site: string; area: string | null; detail: string | null }
 type Tenant = { id: string; name: string }
 type MonitoringZoneRef = { id: string; name: string; location: { id: string; site: string; area: string | null } | null }
-type AssetMonitoringData = { monitoringEnabled: boolean; zoneId: string | null; templateOverride: string | null; snmpCommunity: string | null; status: string } | null
+type AssetMonitoringData = { monitoringEnabled: boolean; zoneId: string | null; templateOverride: string | null; snmpCommunity: string | null; monitoringIpAddress?: string | null; monitoringHostname?: string | null; status: string } | null
 
 interface AssetFormProps {
   mode: 'create' | 'edit'
@@ -96,6 +96,8 @@ export function AssetForm({ mode, assetId, assetTypes, brands, locations, tenant
   const [monZoneId, setMonZoneId] = useState(assetMonitoring?.zoneId ?? '')
   const [monTemplate, setMonTemplate] = useState(assetMonitoring?.templateOverride ?? '')
   const [monSnmp, setMonSnmp] = useState(assetMonitoring?.snmpCommunity ?? '')
+  const [monIp, setMonIp] = useState(assetMonitoring?.monitoringIpAddress ?? initialData?.ipAddress ?? '')
+  const [monHostname, setMonHostname] = useState(assetMonitoring?.monitoringHostname ?? initialData?.hostname ?? '')
 
   const selectedType = assetTypes.find(t => t.id === form.assetTypeId)
   const isMonitorable = selectedType?.isMonitorable ?? false
@@ -114,6 +116,7 @@ export function AssetForm({ mode, assetId, assetTypes, brands, locations, tenant
     if (!form.assetTypeId) { toast.error('Seleccioná un tipo de activo'); return }
     if (!form.tenantId) { toast.error('Seleccioná un cliente'); return }
     if (isMonitorable && monEnabled && !monZoneId) { toast.error('Seleccioná un monitoreador'); return }
+    if (isMonitorable && monEnabled && !monIp.trim() && !monHostname.trim()) { toast.error('Indicá IP objetivo o hostname objetivo de monitoreo'); return }
 
     setLoading(true)
     try {
@@ -143,6 +146,8 @@ export function AssetForm({ mode, assetId, assetTypes, brands, locations, tenant
           zoneId: monEnabled ? monZoneId || null : null,
           templateOverride: monEnabled ? monTemplate || null : null,
           snmpCommunity: monEnabled ? monSnmp || null : null,
+          monitoringIpAddress: monEnabled ? monIp || null : null,
+          monitoringHostname: monEnabled ? monHostname || null : null,
         })
       }
 
@@ -346,9 +351,21 @@ export function AssetForm({ mode, assetId, assetTypes, brands, locations, tenant
                       {monitoringZones.length === 0 && (
                         <p className="text-sm text-orange-600">
                           No hay monitoreadores configurados para este cliente.{' '}
-                          <Link href="/admin/monitoring/zones" className="underline">Agregar uno</Link>
+                          <Link href="/admin/monitoring" className="underline">Ver configuración YAML</Link>
                         </p>
                       )}
+                    </div>
+
+                    <div className="grid grid-cols-2 gap-4">
+                      <div className="space-y-2">
+                        <Label>IP objetivo de monitoreo</Label>
+                        <Input value={monIp} onChange={e => setMonIp(e.target.value)} placeholder="IP alcanzable desde el monitoreador seleccionado" />
+                        <p className="text-xs text-muted-foreground">Usá la IP que el monitoreador del cliente puede alcanzar desde su LAN.</p>
+                      </div>
+                      <div className="space-y-2">
+                        <Label>Hostname objetivo de monitoreo</Label>
+                        <Input value={monHostname} onChange={e => setMonHostname(e.target.value)} placeholder="Hostname resolvible desde la LAN del monitoreador" />
+                      </div>
                     </div>
 
                     <div className="grid grid-cols-2 gap-4">

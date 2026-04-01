@@ -423,6 +423,112 @@ These users are created by the seed script for local development:
 
 ---
 
+
+## Monitoring Configuration (YAML source of truth)
+
+Monitoring infrastructure is no longer populated from the admin CRUD views.
+The source of truth is the server-side file:
+
+- `config/monitoring.yml`
+
+The left sidebar entry **Monitoreo** remains, but it now acts as an operational/status page that reads and syncs the YAML into the database.
+
+### What the YAML controls
+
+- Global Zabbix URL and API token
+- Global Grafana URL
+- Per-tenant monitoring integration
+- Per-tenant monitoreadores / probes
+- Zabbix proxy metadata
+- WireGuard endpoint and public key
+- Notes for each monitoreador
+
+### Required data to populate a tenant
+
+For each tenant/client, define:
+
+- Tenant reference
+  - Prefer `databaseId` from table `Tenant.id`
+  - Or use the exact tenant `name`
+- Integration data
+  - `enabled`
+  - `zabbixHostGroupName`
+  - optionally tenant-specific Zabbix/Grafana overrides
+- One or more probes (`probes[]`)
+  - `name`
+  - `location`
+    - Prefer `databaseId` from table `Location.id`
+    - Or use exact `site` + optional `area`
+  - `zabbixProxy.name`
+  - `zabbixProxy.id`
+  - `wireguard.endpoint`
+  - `wireguard.publicKey`
+  - `notes`
+
+### How to identify tenant and location
+
+Preferred: use database UUIDs.
+
+Examples:
+
+- Tenant ID source: table `Tenant`, column `id`
+- Location ID source: table `Location`, column `id`
+
+If you do not use IDs, matching falls back to:
+
+- tenant by exact `name`
+- location by exact `site` + `area` within the tenant
+
+### Example
+
+```yaml
+version: 1
+
+global:
+  zabbix:
+    url: http://127.0.0.1:8080
+    apiToken: YOUR_ZABBIX_API_TOKEN
+  grafana:
+    url: http://127.0.0.1:3001
+
+tenants:
+  - tenant:
+      name: "PO+"
+      # databaseId: "tenant-uuid"
+    integration:
+      enabled: true
+      zabbixHostGroupName: "PO+"
+    probes:
+      - name: "Monitoreador PO+"
+        location:
+          site: "Central"
+          # databaseId: "location-uuid"
+        zabbixProxy:
+          name: "proxy-po-plus-lan1"
+          id: "1"
+        wireguard:
+          endpoint: "10.13.13.2"
+          publicKey: "BASE64_PUBLIC_KEY"
+        notes: "Ubuntu VM probe"
+```
+
+### Operational flow
+
+1. Edit `config/monitoring.yml` on the app server.
+2. Re-open **Admin → Monitoreo** or restart the app.
+3. The app syncs YAML → `MonitoringIntegration` + `MonitoringZone` in PostgreSQL.
+4. Assets can reference the synced monitoreadores from the existing asset monitoring flow.
+
+### Current production data
+
+The repository/server config already includes the first PO+ monitoreador:
+
+- Tenant: `PO+`
+- Probe name: `Monitoreador PO+`
+- Zabbix proxy: `proxy-po-plus-lan1` (`id: 1`)
+- WireGuard endpoint: `10.13.13.2`
+
+
 ## Infrastructure
 
 ### Dev Server

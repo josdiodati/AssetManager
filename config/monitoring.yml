@@ -1,0 +1,57 @@
+version: 1
+
+# Monitoring infrastructure configuration for AssetManager.
+#
+# This file is the source of truth for monitoring integrations and monitoreadores.
+# Do not load Zabbix/Grafana/WireGuard infrastructure credentials from the admin UI.
+# Edit this file on the application server, then restart/sync the app.
+#
+# IDs can be expressed in two ways:
+#   1. databaseId: exact UUID from PostgreSQL (recommended for stable matching)
+#   2. slug/name: human-readable fallback if you do not want to use UUIDs
+#
+# How to find the IDs:
+# - Tenant ID:
+#   Open the tenant in the database table "Tenant" and copy id,
+#   or use the app tenant selector and map the tenant name exactly.
+# - Location ID:
+#   Open the tenant location in table "Location" and copy id.
+#   A location belongs to one tenant.
+#
+# Current production example for PO+ is included below.
+
+global:
+  zabbix:
+    url: http://127.0.0.1:8080
+    apiToken: 08f04a17f357952225fa5bd2efb429afc0662380f4f3feb8f4f24e44055ae9c8
+  grafana:
+    url: http://127.0.0.1:3001
+
+# One entry per tenant/client.
+tenants:
+  - tenant:
+      name: "PO+"
+      databaseId: "4d8f76ec-cd30-49cd-bb96-3159cda7c456"
+    integration:
+      enabled: true
+      zabbixHostGroupName: "PO+"
+      # Optional overrides. If omitted, values from global are used.
+      # zabbixUrl: http://127.0.0.1:8080
+      # zabbixApiToken: ...
+      # grafanaUrl: http://127.0.0.1:3001
+      # grafanaOrgId: 12
+      # grafanaApiToken: ...
+      # grafanaDashboardUid: ...
+    probes:
+      - name: "Monitoreador PO+"
+        # Match tenant location by DB id when possible.
+        location:
+          site: "Central"
+          databaseId: "dbed2585-ef90-400a-97ff-a003ea3e0396"
+        zabbixProxy:
+          name: "proxy-po-plus-lan1"
+          id: "1"
+        wireguard:
+          endpoint: "10.13.13.2"
+          publicKey: "WTB3c5ymX38+PjXgZUQkh95J+JU/o31iu7srLBTLHT0="
+        notes: "Ubuntu VM monitoreador PO+ enlazado al Zabbix central por WireGuard"

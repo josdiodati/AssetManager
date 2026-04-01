@@ -630,6 +630,8 @@ model AssetMonitoring {
   monitoringEnabled Boolean          @default(true)
   templateOverride  String?
   snmpCommunity     String?
+  monitoringIpAddress String?
+  monitoringHostname  String?
   lastSyncAt        DateTime?
   lastError         String?
   createdAt         DateTime         @default(now())

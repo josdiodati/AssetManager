@@ -145,6 +145,8 @@ export async function upsertAssetMonitoring(assetId: string, data: {
   zoneId?: string | null;
   templateOverride?: string | null;
   snmpCommunity?: string | null;
+  monitoringIpAddress?: string | null;
+  monitoringHostname?: string | null;
 }) {
   const session = await auth()
   if (!session || session.user.role === 'CLIENT_ADMIN') {
@@ -179,6 +181,8 @@ export async function upsertAssetMonitoring(assetId: string, data: {
       zoneId: data.zoneId || null,
       templateOverride: data.templateOverride || null,
       snmpCommunity: data.snmpCommunity || null,
+      monitoringIpAddress: data.monitoringIpAddress || null,
+      monitoringHostname: data.monitoringHostname || null,
     },
     update: {
       monitoringEnabled: true,
@@ -186,6 +190,8 @@ export async function upsertAssetMonitoring(assetId: string, data: {
       zoneId: data.zoneId || null,
       templateOverride: data.templateOverride || null,
       snmpCommunity: data.snmpCommunity || null,
+      monitoringIpAddress: data.monitoringIpAddress || null,
+      monitoringHostname: data.monitoringHostname || null,
     },
   })
 

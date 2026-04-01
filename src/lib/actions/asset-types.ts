@@ -15,7 +15,7 @@ export async function getAssetTypes(tenantId?: string | null) {
 
 export async function createAssetType(data: {
   name: string; categoryId: string; requiresApproval: boolean;
-  allowsPersonAssignment: boolean; fieldConfig: any; tenantId?: string | null
+  allowsPersonAssignment: boolean; isMonitorable: boolean; fieldConfig: any; tenantId?: string | null
 }) {
   const session = await auth()
   if (!session || session.user.role === 'CLIENT_ADMIN') throw new Error('Unauthorized')
@@ -26,7 +26,7 @@ export async function createAssetType(data: {
 
 export async function updateAssetType(id: string, data: Partial<{
   name: string; categoryId: string; requiresApproval: boolean;
-  allowsPersonAssignment: boolean; active: boolean
+  allowsPersonAssignment: boolean; isMonitorable: boolean; active: boolean
 }>) {
   const session = await auth()
   if (!session || session.user.role === 'CLIENT_ADMIN') throw new Error('Unauthorized')
