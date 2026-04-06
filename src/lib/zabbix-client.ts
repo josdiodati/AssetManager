@@ -142,6 +142,41 @@ export async function deleteHost(config: ZabbixConfig, hostId: string): Promise<
   await rpc(config, 'host.delete', [hostId])
 }
 
+
+export async function updateHostInterface(config: ZabbixConfig, hostId: string, params: {
+  ipAddress?: string
+  port?: number
+  interfaceType?: 1 | 2 | 3 | 4
+  snmpCommunity?: string
+}): Promise<void> {
+  // Get existing interface
+  const hosts = await rpc<Array<{ interfaces: Array<{ interfaceid: string; type: string }> }>>(
+    config, "host.get", {
+      hostids: [hostId],
+      output: ["hostid"],
+      selectInterfaces: ["interfaceid", "type", "ip", "port"],
+    }
+  )
+  const iface = hosts[0]?.interfaces?.[0]
+  if (!iface) return
+
+  const ifaceType = params.interfaceType ?? Number(iface.type) as 1 | 2 | 3 | 4
+  const updateData: any = { interfaceid: iface.interfaceid }
+  if (params.ipAddress) updateData.ip = params.ipAddress
+  if (params.port) updateData.port = params.port.toString()
+
+  // Update SNMP details if SNMP interface
+  if (ifaceType === 2 && params.snmpCommunity) {
+    updateData.details = {
+      version: "2",
+      bulk: "1",
+      community: params.snmpCommunity,
+    }
+  }
+
+  await rpc(config, "hostinterface.update", updateData)
+}
+
 export async function enableHost(config: ZabbixConfig, hostId: string): Promise<void> {
   await rpc(config, 'host.update', { hostid: hostId, status: 0 })
 }
@@ -270,6 +305,14 @@ export async function syncAssetToZabbix(assetId: string): Promise<SyncResult> {
         templateIds,
         proxyId,
         description: desc,
+      })
+
+      // Sync interface settings (IP, port, SNMP community)
+      await updateHostInterface(config, assetMon.zabbixHostId, {
+        ipAddress: assetMon.monitoringIpAddress || asset.ipAddress || undefined,
+        port: monTemplate?.defaultPort || undefined,
+        interfaceType: ifaceType as 1 | 2 | 3 | 4,
+        snmpCommunity: assetMon.snmpCommunity || monTemplate?.snmpCommunity || undefined,
       })
 
       await prisma.assetMonitoring.update({
