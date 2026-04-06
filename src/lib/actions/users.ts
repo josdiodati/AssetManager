@@ -14,8 +14,13 @@ const userCreateSchema = z.object({
   language: z.enum(['es', 'en']).default('es'),
 })
 
-const userUpdateSchema = userCreateSchema.partial().omit({ password: true }).extend({
+const userUpdateSchema = z.object({
+  email: z.string().email().optional(),
+  name: z.string().min(1).optional(),
   password: z.string().min(8).optional(),
+  role: z.enum(['SUPER_ADMIN', 'INTERNAL_ADMIN', 'CLIENT_ADMIN']).optional(),
+  tenantId: z.string().nullable().optional(),
+  language: z.enum(['es', 'en']).optional(),
 })
 
 export async function getUsers(tenantId?: string | null) {
@@ -40,9 +45,12 @@ export async function createUser(data: z.infer<typeof userCreateSchema>) {
 export async function updateUser(id: string, data: z.infer<typeof userUpdateSchema>) {
   const session = await auth()
   if (!session || session.user.role === 'CLIENT_ADMIN') throw new Error('Unauthorized')
-  const { password, ...rest } = data
+  const parsed = userUpdateSchema.parse(data)
+  const { password, ...rest } = parsed
   const updateData: any = { ...rest }
   if (password) updateData.passwordHash = await bcrypt.hash(password, 12)
+  // Explicitly handle tenantId null (unassign from tenant)
+  if ('tenantId' in parsed) updateData.tenantId = parsed.tenantId ?? null
   const user = await prisma.user.update({ where: { id }, data: updateData })
   revalidatePath('/admin/users')
   return user

@@ -11,10 +11,24 @@ import { Plus, Pencil, Trash2 } from 'lucide-react'
 import { createUser, updateUser, deleteUser } from '@/lib/actions/users'
 import { toast } from 'sonner'
 
-type User = { id: string; name: string; email: string; role: string; active: boolean; tenant?: { name: string } | null }
+type User = {
+  id: string
+  name: string
+  email: string
+  role: string
+  language?: string
+  active: boolean
+  tenantId?: string | null
+  tenant?: { name: string } | null
+}
 type Tenant = { id: string; name: string }
 
 const roleLabels: Record<string, string> = { SUPER_ADMIN: 'Super Admin', INTERNAL_ADMIN: 'Admin Interno', CLIENT_ADMIN: 'Admin Cliente' }
+const NO_TENANT = '__none__'
+
+function needsTenant(role: string) {
+  return role === 'CLIENT_ADMIN' || role === 'INTERNAL_ADMIN'
+}
 
 export function UsersClient({ users, tenants, currentRole }: { users: User[]; tenants: Tenant[]; currentRole: string }) {
   const router = useRouter()
@@ -22,17 +36,45 @@ export function UsersClient({ users, tenants, currentRole }: { users: User[]; te
   const [loading, setLoading] = useState(false)
   const [form, setForm] = useState({ name: '', email: '', password: '', role: 'CLIENT_ADMIN', tenantId: '', language: 'es' as 'es' | 'en' })
 
-  function openCreate() { setForm({ name: '', email: '', password: '', role: 'CLIENT_ADMIN', tenantId: '', language: 'es' }); setModal({ mode: 'create' }) }
-  function openEdit(u: User) { setForm({ name: u.name, email: u.email, password: '', role: u.role, tenantId: '', language: 'es' }); setModal({ mode: 'edit', user: u }) }
+  function openCreate() {
+    setForm({ name: '', email: '', password: '', role: 'CLIENT_ADMIN', tenantId: '', language: 'es' })
+    setModal({ mode: 'create' })
+  }
+
+  function openEdit(u: User) {
+    setForm({
+      name: u.name,
+      email: u.email,
+      password: '',
+      role: u.role,
+      tenantId: u.tenantId ?? NO_TENANT,
+      language: (u.language as 'es' | 'en') ?? 'es',
+    })
+    setModal({ mode: 'edit', user: u })
+  }
 
   async function handleSubmit() {
     setLoading(true)
     try {
+      const resolvedTenantId = form.tenantId === NO_TENANT ? null : form.tenantId || null
       if (modal?.mode === 'create') {
-        await createUser({ name: form.name, email: form.email, password: form.password, role: form.role as any, tenantId: form.tenantId || null, language: form.language })
+        await createUser({
+          name: form.name,
+          email: form.email,
+          password: form.password,
+          role: form.role as any,
+          tenantId: resolvedTenantId,
+          language: form.language,
+        })
         toast.success('Usuario creado')
       } else if (modal?.user) {
-        const data: any = { name: form.name, email: form.email, role: form.role }
+        const data: any = {
+          name: form.name,
+          email: form.email,
+          role: form.role,
+          tenantId: resolvedTenantId,
+          language: form.language,
+        }
         if (form.password) data.password = form.password
         await updateUser(modal.user.id, data)
         toast.success('Usuario actualizado')
@@ -114,17 +156,31 @@ export function UsersClient({ users, tenants, currentRole }: { users: User[]; te
             </SelectContent>
           </Select>
         </div>
-        {(form.role === 'CLIENT_ADMIN' && tenants.length > 0) && (
+        {tenants.length > 0 && (
           <div className="space-y-2">
             <Label>Cliente</Label>
             <Select value={form.tenantId} onValueChange={v => setForm(f => ({ ...f, tenantId: v }))}>
               <SelectTrigger><SelectValue placeholder="Seleccionar cliente" /></SelectTrigger>
               <SelectContent>
+                {!needsTenant(form.role) && <SelectItem value={NO_TENANT}>Sin cliente</SelectItem>}
                 {tenants.map(t => <SelectItem key={t.id} value={t.id}>{t.name}</SelectItem>)}
               </SelectContent>
             </Select>
+            {needsTenant(form.role) && !form.tenantId && (
+              <p className="text-xs text-amber-600">Este rol requiere un cliente asignado</p>
+            )}
           </div>
         )}
+        <div className="space-y-2">
+          <Label>Idioma</Label>
+          <Select value={form.language} onValueChange={v => setForm(f => ({ ...f, language: v as 'es' | 'en' }))}>
+            <SelectTrigger><SelectValue /></SelectTrigger>
+            <SelectContent>
+              <SelectItem value="es">Español</SelectItem>
+              <SelectItem value="en">English</SelectItem>
+            </SelectContent>
+          </Select>
+        </div>
       </ModalForm>
     </div>
   )
