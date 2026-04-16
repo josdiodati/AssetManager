@@ -1,5 +1,5 @@
 'use server'
-import { syncAssetToZabbix, unsyncAssetFromZabbix } from "@/lib/zabbix-client"
+import { syncAssetToZabbix, unsyncAssetFromZabbix, acknowledgeEvent } from "@/lib/zabbix-client"
 import { prisma } from '@/lib/prisma'
 import { auth } from '@/lib/auth'
 import { revalidatePath } from 'next/cache'
@@ -216,4 +216,40 @@ export async function provisionGrafana(tenantId: string) {
   const result = await provisionGrafanaForTenant(tenantId)
   revalidatePath('/admin/monitoring')
   return result
+}
+
+// ─── Acknowledge Zabbix Problems ─────────────────────────────────────────────
+
+export async function acknowledgeProblems(assetMonitoringId: string, eventIds: string[], message?: string) {
+  const session = await auth()
+  if (!session || !['SUPER_ADMIN', 'INTERNAL_ADMIN'].includes(session.user.role)) {
+    throw new Error('Unauthorized')
+  }
+
+  const monitoring = await prisma.assetMonitoring.findUnique({
+    where: { id: assetMonitoringId },
+    include: {
+      asset: {
+        include: {
+          tenant: { include: { monitoringIntegration: true } },
+        },
+      },
+    },
+  })
+
+  if (!monitoring) throw new Error('Monitoring config not found')
+
+  const integration = monitoring.asset.tenant.monitoringIntegration
+  if (!integration || !integration.enabled) throw new Error('Monitoring integration not configured or disabled')
+
+  const config = {
+    url: integration.zabbixUrl,
+    apiToken: integration.zabbixApiToken,
+  }
+
+  await acknowledgeEvent(config, eventIds, message || `Acknowledged by ${session.user.name || session.user.email} from Asset Manager`)
+
+  revalidatePath(`/admin/monitoring/assets/${assetMonitoringId}`)
+  revalidatePath('/admin/monitoring')
+  return { success: true }
 }

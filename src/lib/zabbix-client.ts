@@ -495,6 +495,14 @@ export async function getHostProblems(config: ZabbixConfig, hostId: string): Pro
   })
 }
 
+export async function acknowledgeEvent(config: ZabbixConfig, eventIds: string[], message?: string): Promise<void> {
+  await rpc(config, 'event.acknowledge', {
+    eventids: eventIds,
+    action: 6, // 2 (acknowledge) + 4 (add message)
+    message: message || 'Acknowledged from Asset Manager',
+  })
+}
+
 export async function getHostItems(config: ZabbixConfig, hostId: string): Promise<ZabbixHostItem[]> {
   return await rpc<ZabbixHostItem[]>(config, 'item.get', {
     hostids: [hostId],
@@ -546,7 +554,7 @@ export async function getHostsHealthBatch(config: ZabbixConfig, hostIds: string[
       rpc<ZabbixHostProblem[]>(config, 'problem.get', {
         hostids: [hostId],
         recent: true,
-        output: ['eventid', 'objectid', 'name', 'severity'],
+        output: ['eventid', 'objectid', 'name', 'severity', 'acknowledged'],
         sortfield: 'eventid',
         sortorder: 'DESC',
       }).then((problems) => ({ hostId, problems }))
@@ -618,7 +626,9 @@ export async function getHostsHealthBatch(config: ZabbixConfig, hostIds: string[
     const availableStatus = hasAnyUnavailable ? 2 : hasAnyAvailable ? 1 : 0
 
     const hostProblems = problemsByHost.get(host.hostid) ?? []
-    const severities = hostProblems.map((problem) => Number(problem.severity))
+    // Only unacknowledged problems affect health semaphore
+    const unackedProblems = hostProblems.filter((p) => p.acknowledged !== '1')
+    const severities = unackedProblems.map((problem) => Number(problem.severity))
     const maxSeverity = severities.length > 0 ? Math.max(...severities) : 0
 
     let health: HealthStatus

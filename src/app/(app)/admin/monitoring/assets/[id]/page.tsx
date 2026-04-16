@@ -11,8 +11,9 @@ import {
   type ZabbixHostProblem,
   type ZabbixHostItem,
 } from '@/lib/zabbix-client'
-import { getSeverityName, getSeverityBadgeClass } from '@/lib/monitoring-utils'
+// monitoring-utils imports moved to problems-table client component
 import { ItemsTable } from './items-table'
+import { ProblemsTable } from './problems-table'
 
 type PageProps = {
   params: Promise<{ id: string }>
@@ -258,42 +259,7 @@ export default async function MonitoringAssetDetailPage({ params }: PageProps) {
         </div>
       </section>
 
-      <section className='rounded-lg border bg-card p-4 space-y-3'>
-        <h2 className='font-semibold'>Problemas Activos</h2>
-        {problems.length === 0 ? (
-          <p className='text-sm font-medium text-green-700'>Sin problemas activos ✅</p>
-        ) : (
-          <div className='overflow-x-auto'>
-            <table className='w-full text-sm'>
-              <thead>
-                <tr className='border-b'>
-                  <th className='py-2 text-left'>Severidad</th>
-                  <th className='py-2 text-left'>Problema</th>
-                  <th className='py-2 text-left'>Desde</th>
-                  <th className='py-2 text-left'>Reconocido</th>
-                </tr>
-              </thead>
-              <tbody>
-                {problems.map((problem) => {
-                  const severity = Number(problem.severity)
-                  return (
-                    <tr key={problem.eventid} className='border-b last:border-0'>
-                      <td className='py-2'>
-                        <span className={`inline-flex rounded px-2 py-1 text-xs ${getSeverityBadgeClass(severity)}`}>
-                          {getSeverityName(severity)}
-                        </span>
-                      </td>
-                      <td className='py-2'>{problem.name}</td>
-                      <td className='py-2'>{formatUnixDateTime(problem.clock)}</td>
-                      <td className='py-2'>{problem.acknowledged === '1' ? '✅' : '❌'}</td>
-                    </tr>
-                  )
-                })}
-              </tbody>
-            </table>
-          </div>
-        )}
-      </section>
+      <ProblemsTable problems={problems} monitoringId={monitoring.id} />
 
       <section className='rounded-lg border bg-card p-4 space-y-3'>
         <div>
