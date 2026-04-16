@@ -1,5 +1,6 @@
 import type { ReactNode } from 'react'
 import Link from 'next/link'
+import { Pencil } from 'lucide-react'
 import { redirect } from 'next/navigation'
 import { auth } from '@/lib/auth'
 import { prisma } from '@/lib/prisma'
@@ -178,7 +179,16 @@ export default async function MonitoringAssetDetailPage({ params }: PageProps) {
           ← Volver a Monitoreo
         </Link>
         <div>
-          <h1 className='text-2xl font-bold'>{title}</h1>
+          <div className='flex items-center gap-3'>
+            <h1 className='text-2xl font-bold'>{title}</h1>
+            <Link
+              href={`/assets/${monitoring.asset.id}/edit`}
+              className='inline-flex items-center gap-1.5 rounded-md border px-3 py-1.5 text-sm font-medium hover:bg-accent transition-colors'
+            >
+              <Pencil className='h-4 w-4' />
+              Editar Activo
+            </Link>
+          </div>
           <p className='mt-1 text-muted-foreground'>{subtitle}</p>
         </div>
       </div>
