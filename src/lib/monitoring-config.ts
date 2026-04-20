@@ -72,9 +72,12 @@ export async function syncMonitoringConfigToDatabase() {
       throw new Error(`Monitoring config tenant not found: ${tenantEntry.tenant.databaseId || tenantEntry.tenant.name || "<unknown>"}`)
     }
 
+    // Resolve token: prefer tenant-level override, then global fallback
+    const resolvedZabbixToken = tenantEntry.integration?.zabbixApiToken || cfg.global?.zabbix?.apiToken || ""
+
     const integrationData = {
       zabbixUrl: tenantEntry.integration?.zabbixUrl || cfg.global?.zabbix?.url || "",
-      zabbixApiToken: tenantEntry.integration?.zabbixApiToken || cfg.global?.zabbix?.apiToken || "",
+      zabbixApiToken: resolvedZabbixToken,
       zabbixHostGroupId: tenantEntry.integration?.zabbixHostGroupId,
       zabbixHostGroupName: tenantEntry.integration?.zabbixHostGroupName,
       grafanaUrl: tenantEntry.integration?.grafanaUrl || cfg.global?.grafana?.url,
@@ -87,10 +90,26 @@ export async function syncMonitoringConfigToDatabase() {
     if (!integrationData.zabbixUrl) throw new Error(`Missing zabbixUrl for tenant ${tenant.name}`)
     if (!integrationData.zabbixApiToken) throw new Error(`Missing zabbixApiToken for tenant ${tenant.name}`)
 
+    // Build update payload: NEVER overwrite tokens from YAML unless
+    // the tenant entry explicitly declares its own token (not the global fallback).
+    // This prevents a stale global.zabbix.apiToken from clobbering a
+    // token that was regenerated directly in Zabbix + DB.
+    const hasExplicitTenantToken = !!tenantEntry.integration?.zabbixApiToken
+    const hasExplicitTenantGrafanaToken = !!tenantEntry.integration?.grafanaApiToken
+
+    const { zabbixApiToken, grafanaApiToken, ...updateSafeFields } = integrationData
+
+    const updatePayload = {
+      ...updateSafeFields,
+      // Only overwrite tokens on update if the tenant entry explicitly declares them
+      ...(hasExplicitTenantToken ? { zabbixApiToken } : {}),
+      ...(hasExplicitTenantGrafanaToken ? { grafanaApiToken } : {}),
+    }
+
     const integration = await prisma.monitoringIntegration.upsert({
       where: { tenantId: tenant.id },
       create: { tenantId: tenant.id, ...integrationData },
-      update: integrationData,
+      update: updatePayload,
     })
 
     for (const probe of tenantEntry.probes ?? []) {
