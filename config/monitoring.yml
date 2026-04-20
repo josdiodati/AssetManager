@@ -23,7 +23,7 @@ version: 1
 global:
   zabbix:
     url: http://127.0.0.1:8080
-    apiToken: 08f04a17f357952225fa5bd2efb429afc0662380f4f3feb8f4f24e44055ae9c8
+    apiToken: 0392ad085b1bd30aea68fde875d15f3ec55cfd8dac73251932e5286a235b2dbd
   grafana:
     url: http://127.0.0.1:3001
 
