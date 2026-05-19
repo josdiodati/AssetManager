@@ -11,8 +11,12 @@ import { Plus, Pencil, Trash2 } from 'lucide-react'
 import { createLocation, updateLocation, deleteLocation } from '@/lib/actions/locations'
 import { toast } from 'sonner'
 
-type Location = { id: string; site: string; area: string | null; detail: string | null; active: boolean; tenant?: { name: string } | null }
+type Location = { id: string; site: string; area: string | null; detail: string | null; active: boolean; tenantId: string; tenant?: { name: string } | null }
 type Tenant = { id: string; name: string }
+
+function getErrorMessage(error: unknown) {
+  return error instanceof Error ? error.message : 'Ocurrió un error inesperado'
+}
 
 export function LocationsClient({ locations, tenants, defaultTenantId, currentRole }: {
   locations: Location[]; tenants: Tenant[]; defaultTenantId: string; currentRole: string
@@ -29,12 +33,12 @@ export function LocationsClient({ locations, tenants, defaultTenantId, currentRo
     setModal({ mode: 'create' })
   }
   function openEdit(l: Location) {
-    setForm({ site: l.site, area: l.area ?? '', detail: l.detail ?? '', tenantId: defaultTenantId })
+    setForm({ site: l.site, area: l.area ?? '', detail: l.detail ?? '', tenantId: l.tenantId ?? defaultTenantId })
     setModal({ mode: 'edit', loc: l })
   }
 
   async function handleSubmit() {
-    if (!form.tenantId) { toast.error('Seleccioná un cliente'); return }
+    if (modal?.mode === 'create' && !form.tenantId) { toast.error('Seleccioná un cliente'); return }
     setLoading(true)
     try {
       if (modal?.mode === 'create') {
@@ -46,22 +50,19 @@ export function LocationsClient({ locations, tenants, defaultTenantId, currentRo
       }
       setModal(null)
       router.refresh()
-    } catch (e: any) { toast.error(e.message) }
+    } catch (error: unknown) { toast.error(getErrorMessage(error)) }
     finally { setLoading(false) }
   }
 
   async function handleDelete(id: string) {
     if (!confirm('¿Eliminar esta ubicación?')) return
     try { await deleteLocation(id); toast.success('Ubicación eliminada'); router.refresh() }
-    catch (e: any) { toast.error(e.message) }
+    catch (error: unknown) { toast.error(getErrorMessage(error)) }
   }
 
   const filtered = filterTenant === '__all__'
     ? locations
-    : locations.filter(l => {
-        // need tenantId on Location — filter by tenant name as proxy
-        return l.tenant?.name === tenants.find(t => t.id === filterTenant)?.name
-      })
+    : locations.filter(l => l.tenantId === filterTenant)
 
   return (
     <div className="space-y-6">
@@ -91,7 +92,7 @@ export function LocationsClient({ locations, tenants, defaultTenantId, currentRo
         searchKeys={['site', 'area']}
         searchPlaceholder="Buscar ubicación..."
         columns={[
-          ...(isSuperOrInternal ? [{ key: 'tenant' as any, header: 'Cliente', render: (r: Location) => r.tenant?.name ?? '—' }] : []),
+          ...(isSuperOrInternal ? [{ key: 'tenant', header: 'Cliente', render: (r: Location) => r.tenant?.name ?? '—' }] : []),
           { key: 'site', header: 'Sede' },
           { key: 'area', header: 'Área', render: (r: Location) => r.area ?? '—' },
           { key: 'detail', header: 'Detalle', render: (r: Location) => r.detail ?? '—' },
