@@ -5,6 +5,7 @@ import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
+import { Combobox } from '@/components/ui/combobox'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { Card, CardContent } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
@@ -232,24 +233,29 @@ export function AssetForm({ mode, assetId, assetTypes, brands, locations, tenant
 
                 <div className="space-y-2">
                   <Label>Marca</Label>
-                  <Select value={form.brandId} onValueChange={v => { set('brandId', v === '__none__' ? '' : v); set('modelId', '') }}>
-                    <SelectTrigger><SelectValue placeholder="Seleccionar marca" /></SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="__none__">Sin marca</SelectItem>
-                      {brands.map(b => <SelectItem key={b.id} value={b.id}>{b.name}</SelectItem>)}
-                    </SelectContent>
-                  </Select>
+                  <Combobox
+                    options={brands.map(b => ({ value: b.id, label: b.name }))}
+                    value={form.brandId}
+                    onValueChange={v => { set('brandId', v); set('modelId', '') }}
+                    placeholder="Seleccionar marca"
+                    searchPlaceholder="Buscar marca..."
+                    emptyText="Sin marcas."
+                    noneLabel="Sin marca"
+                  />
                 </div>
 
                 <div className="space-y-2">
                   <Label>Modelo</Label>
-                  <Select value={form.modelId} onValueChange={v => set('modelId', v === '__none__' ? '' : v)} disabled={!form.brandId}>
-                    <SelectTrigger><SelectValue placeholder={form.brandId ? 'Seleccionar modelo' : 'Primero seleccioná marca'} /></SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="__none__">Sin modelo</SelectItem>
-                      {availableModels.map(m => <SelectItem key={m.id} value={m.id}>{m.name}</SelectItem>)}
-                    </SelectContent>
-                  </Select>
+                  <Combobox
+                    options={availableModels.map(m => ({ value: m.id, label: m.name }))}
+                    value={form.modelId}
+                    onValueChange={v => set('modelId', v)}
+                    placeholder={form.brandId ? 'Seleccionar modelo' : 'Primero seleccioná marca'}
+                    searchPlaceholder="Buscar modelo..."
+                    emptyText="Sin modelos."
+                    disabled={!form.brandId}
+                    noneLabel="Sin modelo"
+                  />
                 </div>
 
                 <div className="space-y-2">
